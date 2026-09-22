@@ -14,6 +14,7 @@ import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.text.InputType;
+import android.text.method.ScrollingMovementMethod;
 import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
@@ -21,7 +22,6 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -41,7 +41,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private TextView stateText;
     private TextView transcript;
-    private ScrollView transcriptScroll;
     private EditText input;
     private Button micButton;
     private Button sendButton;
@@ -118,14 +117,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         stateText.setLetterSpacing(.20f);
         root.addView(stateText);
 
-        transcriptScroll = new ScrollView(this);
-        transcriptScroll.setFillViewport(true);
         GradientDrawable panelBg = roundRect(PANEL, 22, Color.rgb(31, 43, 43));
-        transcriptScroll.setBackground(panelBg);
-        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(-1, 0, 1f);
-        scrollLp.topMargin = dp(20);
-        scrollLp.bottomMargin = dp(16);
-        root.addView(transcriptScroll, scrollLp);
 
         transcript = new TextView(this);
         transcript.setText("Welkom.\n\nTik op de microfoon of typ een bericht. In v0.2 gebruikt de app Android voor spraakherkenning en voorlezen; je tekstvraag gaat via de OpenAI Responses API.");
@@ -133,7 +125,15 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         transcript.setTextSize(16);
         transcript.setLineSpacing(0, 1.25f);
         transcript.setPadding(dp(18), dp(18), dp(18), dp(18));
-        transcriptScroll.addView(transcript);
+        transcript.setBackground(panelBg);
+        transcript.setMovementMethod(new ScrollingMovementMethod());
+        transcript.setVerticalScrollBarEnabled(true);
+        transcript.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
+
+        LinearLayout.LayoutParams transcriptLp = new LinearLayout.LayoutParams(-1, 0, 1f);
+        transcriptLp.topMargin = dp(20);
+        transcriptLp.bottomMargin = dp(16);
+        root.addView(transcript, transcriptLp);
 
         LinearLayout composer = new LinearLayout(this);
         composer.setOrientation(LinearLayout.HORIZONTAL);
@@ -311,10 +311,17 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     private void append(String text) {
         transcript.append(text);
-        if (transcriptScroll != null) {
-            transcriptScroll.post(() ->
-                    transcriptScroll.fullScroll(View.FOCUS_DOWN));
-        }
+        transcript.post(() -> {
+            if (transcript.getLayout() == null || transcript.getLineCount() == 0) return;
+
+            int contentHeight = transcript.getLayout()
+                    .getLineBottom(transcript.getLineCount() - 1);
+            int visibleHeight = transcript.getHeight()
+                    - transcript.getPaddingTop()
+                    - transcript.getPaddingBottom();
+
+            transcript.scrollTo(0, Math.max(0, contentHeight - visibleHeight));
+        });
     }
 
     private void speak(String text) {

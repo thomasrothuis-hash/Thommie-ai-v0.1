@@ -1,4 +1,4 @@
-name: Build THOMMIE AI v0.3 APK
+name: Build THOMMIE AI v0.4 APK
 
 on:
   workflow_dispatch:
@@ -52,17 +52,17 @@ jobs:
           gradle --no-daemon assembleRelease --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/release/app-release.apk THOMMIE_AI_v0.3.apk
+        run: cp app/build/outputs/apk/release/app-release.apk THOMMIE_AI_v0.4.apk
 
       - name: Verify APK signature
         run: |
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify \
-            --print-certs THOMMIE_AI_v0.3.apk
+            --print-certs THOMMIE_AI_v0.4.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: THOMMIE_AI_v0.3
-          path: THOMMIE_AI_v0.3.apk
+          name: THOMMIE_AI_v0.4
+          path: THOMMIE_AI_v0.4.apk
           if-no-files-found: error
           retention-days: 30

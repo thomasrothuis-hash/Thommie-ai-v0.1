@@ -4,12 +4,10 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.speech.tts.TextToSpeech;
-import android.speech.tts.Voice;
-import android.view.View;
-import android.widget.AdapterView;
+import android.text.InputType;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
@@ -18,21 +16,28 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.Locale;
-import java.util.Set;
 
 final class VoiceSettings {
 
-    private static final String PREFS = "thommie_ai_voice";
+    interface TestHandler {
+        void test(String voice, float speed, String instructions);
+    }
 
-    private static final String KEY_LANGUAGE = "language";
-    private static final String KEY_VOICE = "voice";
-    private static final String KEY_PITCH = "pitch";
-    private static final String KEY_RATE = "rate";
+    private static final String PREFS = "thommie_ai_voice";
+    private static final String KEY_VOICE = "cloud_voice";
+    private static final String KEY_SPEED = "cloud_speed";
+    private static final String KEY_STYLE = "cloud_style";
     private static final String KEY_AUTO = "auto_speak";
+
+    private static final String DEFAULT_VOICE = "marin";
+    private static final float DEFAULT_SPEED = 0.96f;
+
+    private static final String DEFAULT_STYLE =
+            "Speak in Dutch with a calm, composed, warm and intelligent presentation. "
+            + "Use a smooth feminine-leaning tone, restrained confidence, subtle dry wit, "
+            + "natural short pauses and a slightly cinematic personal-assistant feel. "
+            + "Never sound excited, sales-like, childish or overly cheerful.";
 
     private VoiceSettings() {}
 
@@ -44,172 +49,99 @@ final class VoiceSettings {
         return prefs(context).getBoolean(KEY_AUTO, true);
     }
 
-    static void apply(Context context, TextToSpeech tts) {
-        if (tts == null) return;
-
-        SharedPreferences p = prefs(context);
-
-        String languageTag = p.getString(KEY_LANGUAGE, "nl-NL");
-        String voiceName = p.getString(KEY_VOICE, "");
-        float pitch = p.getFloat(KEY_PITCH, 0.88f);
-        float rate = p.getFloat(KEY_RATE, 1.03f);
-
-        Locale locale = Locale.forLanguageTag(languageTag);
-
-        tts.setLanguage(locale);
-
-        if (!voiceName.isEmpty()) {
-            Set<Voice> available = tts.getVoices();
-
-            if (available != null) {
-                for (Voice voice : available) {
-                    if (voiceName.equals(voice.getName())) {
-                        tts.setVoice(voice);
-                        break;
-                    }
-                }
-            }
-        }
-
-        tts.setPitch(pitch);
-        tts.setSpeechRate(rate);
+    static String voice(Context context) {
+        return prefs(context).getString(KEY_VOICE, DEFAULT_VOICE);
     }
 
-    static void show(Activity activity, TextToSpeech tts, boolean ttsReady) {
+    static float speed(Context context) {
+        return prefs(context).getFloat(KEY_SPEED, DEFAULT_SPEED);
+    }
 
+    static String style(Context context) {
+        return prefs(context).getString(KEY_STYLE, DEFAULT_STYLE);
+    }
+
+    static void show(Activity activity, TestHandler testHandler) {
         SharedPreferences p = prefs(activity);
 
-        String savedLanguage = p.getString(KEY_LANGUAGE, "nl-NL");
-        String savedVoice = p.getString(KEY_VOICE, "");
-        float savedPitch = p.getFloat(KEY_PITCH, 0.88f);
-        float savedRate = p.getFloat(KEY_RATE, 1.03f);
-        boolean savedAuto = p.getBoolean(KEY_AUTO, true);
+        String savedVoice = voice(activity);
+        float savedSpeed = speed(activity);
+        String savedStyle = style(activity);
+        boolean savedAuto = autoSpeak(activity);
 
         ScrollView scroll = new ScrollView(activity);
-
         LinearLayout box = new LinearLayout(activity);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(45, 20, 45, 30);
         scroll.addView(box);
 
-        TextView languageLabel = new TextView(activity);
-        languageLabel.setText("Stemtaal");
-        languageLabel.setTextSize(16);
-        box.addView(languageLabel);
-
-        Spinner languageSpinner = new Spinner(activity);
-
-        String[] languages = {
-                "Nederlands (NL)",
-                "English (UK)"
-        };
-
-        ArrayAdapter<String> languageAdapter =
-                new ArrayAdapter<>(
-                        activity,
-                        android.R.layout.simple_spinner_item,
-                        languages
-                );
-
-        languageAdapter.setDropDownViewResource(
-                android.R.layout.simple_spinner_dropdown_item
+        TextView engineInfo = new TextView(activity);
+        engineInfo.setText(
+                "Cloud voice via OpenAI gpt-4o-mini-tts.\n"
+                + "Dit vervangt de Samsung-voorleesstem voor THOMMIE AI."
         );
-
-        languageSpinner.setAdapter(languageAdapter);
-
-        if ("en-GB".equals(savedLanguage)) {
-            languageSpinner.setSelection(1);
-        } else {
-            languageSpinner.setSelection(0);
-        }
-
-        box.addView(languageSpinner);
+        engineInfo.setPadding(0, 0, 0, 20);
+        box.addView(engineInfo);
 
         TextView voiceLabel = new TextView(activity);
-        voiceLabel.setText("\nStem");
+        voiceLabel.setText("Stem");
         voiceLabel.setTextSize(16);
         box.addView(voiceLabel);
 
         Spinner voiceSpinner = new Spinner(activity);
+        String[] labels = {
+                "Marin",
+                "Coral",
+                "Shimmer",
+                "Nova",
+                "Sage",
+                "Cedar"
+        };
+        String[] values = {
+                "marin",
+                "coral",
+                "shimmer",
+                "nova",
+                "sage",
+                "cedar"
+        };
 
-        ArrayList<String> voiceLabels = new ArrayList<>();
-        ArrayList<Voice> voiceObjects = new ArrayList<>();
-
-        ArrayAdapter<String> voiceAdapter =
-                new ArrayAdapter<>(
-                        activity,
-                        android.R.layout.simple_spinner_item,
-                        voiceLabels
-                );
-
-        voiceAdapter.setDropDownViewResource(
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                activity,
+                android.R.layout.simple_spinner_item,
+                labels
+        );
+        adapter.setDropDownViewResource(
                 android.R.layout.simple_spinner_dropdown_item
         );
+        voiceSpinner.setAdapter(adapter);
 
-        voiceSpinner.setAdapter(voiceAdapter);
+        int selected = 0;
+        for (int i = 0; i < values.length; i++) {
+            if (values[i].equals(savedVoice)) {
+                selected = i;
+                break;
+            }
+        }
+        voiceSpinner.setSelection(selected);
         box.addView(voiceSpinner);
 
-        Locale initialLocale =
-                languageSpinner.getSelectedItemPosition() == 1
-                        ? Locale.UK
-                        : new Locale("nl", "NL");
-
-        populateVoices(
-                tts,
-                initialLocale,
-                savedVoice,
-                voiceSpinner,
-                voiceAdapter,
-                voiceLabels,
-                voiceObjects
+        TextView speedLabel = new TextView(activity);
+        speedLabel.setText(
+                "\nSnelheid: "
+                        + String.format(Locale.US, "%.2f", savedSpeed)
         );
+        speedLabel.setTextSize(16);
+        box.addView(speedLabel);
 
-        languageSpinner.setOnItemSelectedListener(
-                new AdapterView.OnItemSelectedListener() {
-                    @Override
-                    public void onItemSelected(
-                            AdapterView<?> parent,
-                            View view,
-                            int position,
-                            long id
-                    ) {
-                        Locale locale =
-                                position == 1
-                                        ? Locale.UK
-                                        : new Locale("nl", "NL");
+        SeekBar speedSeek = new SeekBar(activity);
+        speedSeek.setMax(100);
+        int initialProgress =
+                Math.round((savedSpeed - 0.75f) / 0.005f);
+        speedSeek.setProgress(Math.max(0, Math.min(100, initialProgress)));
+        box.addView(speedSeek);
 
-                        populateVoices(
-                                tts,
-                                locale,
-                                savedVoice,
-                                voiceSpinner,
-                                voiceAdapter,
-                                voiceLabels,
-                                voiceObjects
-                        );
-                    }
-
-                    @Override
-                    public void onNothingSelected(AdapterView<?> parent) {}
-                }
-        );
-
-        TextView pitchLabel = new TextView(activity);
-        pitchLabel.setText(
-                "\nPitch: " +
-                        String.format(Locale.US, "%.2f", savedPitch)
-        );
-        pitchLabel.setTextSize(16);
-        box.addView(pitchLabel);
-
-        SeekBar pitchSeek = new SeekBar(activity);
-        pitchSeek.setMax(100);
-        pitchSeek.setProgress(
-                clamp(Math.round((savedPitch - 0.50f) * 100f))
-        );
-        box.addView(pitchSeek);
-
-        pitchSeek.setOnSeekBarChangeListener(
+        speedSeek.setOnSeekBarChangeListener(
                 new SeekBar.OnSeekBarChangeListener() {
                     @Override
                     public void onProgressChanged(
@@ -217,15 +149,14 @@ final class VoiceSettings {
                             int progress,
                             boolean fromUser
                     ) {
-                        float value = 0.50f + (progress / 100f);
-
-                        pitchLabel.setText(
-                                "\nPitch: " +
-                                        String.format(
-                                                Locale.US,
-                                                "%.2f",
-                                                value
-                                        )
+                        float value = 0.75f + progress * 0.005f;
+                        speedLabel.setText(
+                                "\nSnelheid: "
+                                        + String.format(
+                                        Locale.US,
+                                        "%.2f",
+                                        value
+                                )
                         );
                     }
 
@@ -237,339 +168,76 @@ final class VoiceSettings {
                 }
         );
 
-        TextView rateLabel = new TextView(activity);
-        rateLabel.setText(
-                "\nSnelheid: " +
-                        String.format(Locale.US, "%.2f", savedRate)
+        TextView styleLabel = new TextView(activity);
+        styleLabel.setText("\nSpreekstijl");
+        styleLabel.setTextSize(16);
+        box.addView(styleLabel);
+
+        EditText style = new EditText(activity);
+        style.setText(savedStyle);
+        style.setMinLines(5);
+        style.setMaxLines(8);
+        style.setInputType(
+                InputType.TYPE_CLASS_TEXT
+                        | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                        | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         );
-        rateLabel.setTextSize(16);
-        box.addView(rateLabel);
-
-        SeekBar rateSeek = new SeekBar(activity);
-        rateSeek.setMax(100);
-        rateSeek.setProgress(
-                clamp(Math.round((savedRate - 0.50f) * 100f))
-        );
-        box.addView(rateSeek);
-
-        rateSeek.setOnSeekBarChangeListener(
-                new SeekBar.OnSeekBarChangeListener() {
-                    @Override
-                    public void onProgressChanged(
-                            SeekBar seekBar,
-                            int progress,
-                            boolean fromUser
-                    ) {
-                        float value = 0.50f + (progress / 100f);
-
-                        rateLabel.setText(
-                                "\nSnelheid: " +
-                                        String.format(
-                                                Locale.US,
-                                                "%.2f",
-                                                value
-                                        )
-                        );
-                    }
-
-                    @Override
-                    public void onStartTrackingTouch(SeekBar seekBar) {}
-
-                    @Override
-                    public void onStopTrackingTouch(SeekBar seekBar) {}
-                }
-        );
+        box.addView(style);
 
         Switch autoSpeak = new Switch(activity);
         autoSpeak.setText("\nAntwoorden automatisch voorlezen");
         autoSpeak.setChecked(savedAuto);
         box.addView(autoSpeak);
 
-        Button jarvisPreset = new Button(activity);
-        jarvisPreset.setText("JARVIS TONE PRESET");
-        box.addView(jarvisPreset);
+        Button preset = new Button(activity);
+        preset.setText("CALM ASSISTANT PRESET");
+        box.addView(preset);
 
-        jarvisPreset.setOnClickListener(v -> {
-            pitchSeek.setProgress(38);
-            rateSeek.setProgress(53);
+        preset.setOnClickListener(v -> {
+            voiceSpinner.setSelection(0);
+            speedSeek.setProgress(
+                    Math.round((0.96f - 0.75f) / 0.005f)
+            );
+            style.setText(DEFAULT_STYLE);
         });
 
-        Button testVoice = new Button(activity);
-        testVoice.setText("▶ TEST STEM");
-        box.addView(testVoice);
+        Button test = new Button(activity);
+        test.setText("▶ TEST STEM");
+        box.addView(test);
 
-        testVoice.setOnClickListener(v -> {
-
-            if (!ttsReady || tts == null) {
-                Toast.makeText(
-                        activity,
-                        "TTS is nog niet beschikbaar.",
-                        Toast.LENGTH_SHORT
-                ).show();
-                return;
-            }
-
-            String languageTag =
-                    languageSpinner.getSelectedItemPosition() == 1
-                            ? "en-GB"
-                            : "nl-NL";
-
-            float pitch =
-                    0.50f + pitchSeek.getProgress() / 100f;
-
-            float rate =
-                    0.50f + rateSeek.getProgress() / 100f;
-
-            Voice selectedVoice = null;
-
-            int voicePosition =
-                    voiceSpinner.getSelectedItemPosition();
-
-            if (voicePosition >= 0
-                    && voicePosition < voiceObjects.size()) {
-                selectedVoice =
-                        voiceObjects.get(voicePosition);
-            }
-
-            preview(
-                    tts,
-                    languageTag,
-                    selectedVoice,
-                    pitch,
-                    rate
-            );
-
-            String testText;
-
-            if ("en-GB".equals(languageTag)) {
-                testText =
-                        "Good afternoon. THOMMIE AI is online. "
-                        + "All systems are functioning normally.";
-            } else {
-                testText =
-                        "Goedemiddag. THOMMIE AI is online. "
-                        + "Alle systemen functioneren normaal.";
-            }
-
-            tts.speak(
-                    testText,
-                    TextToSpeech.QUEUE_FLUSH,
-                    null,
-                    "thommie_voice_test"
-            );
+        test.setOnClickListener(v -> {
+            String voice = values[voiceSpinner.getSelectedItemPosition()];
+            float speedValue = 0.75f + speedSeek.getProgress() * 0.005f;
+            String styleValue = style.getText().toString().trim();
+            testHandler.test(voice, speedValue, styleValue);
         });
 
-        AlertDialog dialog =
-                new AlertDialog.Builder(activity)
-                        .setTitle("THOMMIE AI v0.3 – Stem & audio")
-                        .setView(scroll)
-                        .setPositiveButton(
-                                "Opslaan",
-                                (d, which) -> {
+        new AlertDialog.Builder(activity)
+                .setTitle("THOMMIE AI v0.4 – Stem & audio")
+                .setView(scroll)
+                .setPositiveButton("Opslaan", (d, which) -> {
+                    String voice =
+                            values[voiceSpinner.getSelectedItemPosition()];
+                    float speedValue =
+                            0.75f + speedSeek.getProgress() * 0.005f;
 
-                                    String languageTag =
-                                            languageSpinner
-                                                    .getSelectedItemPosition()
-                                                    == 1
-                                                    ? "en-GB"
-                                                    : "nl-NL";
+                    p.edit()
+                            .putString(KEY_VOICE, voice)
+                            .putFloat(KEY_SPEED, speedValue)
+                            .putString(
+                                    KEY_STYLE,
+                                    style.getText().toString().trim()
+                            )
+                            .putBoolean(KEY_AUTO, autoSpeak.isChecked())
+                            .apply();
 
-                                    float pitch =
-                                            0.50f
-                                                    + pitchSeek
-                                                    .getProgress()
-                                                    / 100f;
-
-                                    float rate =
-                                            0.50f
-                                                    + rateSeek
-                                                    .getProgress()
-                                                    / 100f;
-
-                                    String voiceName = "";
-
-                                    int voicePosition =
-                                            voiceSpinner
-                                                    .getSelectedItemPosition();
-
-                                    if (voicePosition >= 0
-                                            && voicePosition
-                                            < voiceObjects.size()
-                                            && voiceObjects.get(
-                                            voicePosition
-                                    ) != null) {
-
-                                        voiceName =
-                                                voiceObjects
-                                                        .get(voicePosition)
-                                                        .getName();
-                                    }
-
-                                    p.edit()
-                                            .putString(
-                                                    KEY_LANGUAGE,
-                                                    languageTag
-                                            )
-                                            .putString(
-                                                    KEY_VOICE,
-                                                    voiceName
-                                            )
-                                            .putFloat(
-                                                    KEY_PITCH,
-                                                    pitch
-                                            )
-                                            .putFloat(
-                                                    KEY_RATE,
-                                                    rate
-                                            )
-                                            .putBoolean(
-                                                    KEY_AUTO,
-                                                    autoSpeak.isChecked()
-                                            )
-                                            .apply();
-
-                                    apply(activity, tts);
-
-                                    Toast.makeText(
-                                            activity,
-                                            "Steminstellingen opgeslagen.",
-                                            Toast.LENGTH_SHORT
-                                    ).show();
-                                }
-                        )
-                        .setNegativeButton(
-                                "Annuleren",
-                                (d, which) -> apply(activity, tts)
-                        )
-                        .create();
-
-        dialog.show();
-    }
-
-    private static void preview(
-            TextToSpeech tts,
-            String languageTag,
-            Voice voice,
-            float pitch,
-            float rate
-    ) {
-        Locale locale =
-                Locale.forLanguageTag(languageTag);
-
-        tts.setLanguage(locale);
-
-        if (voice != null) {
-            tts.setVoice(voice);
-        }
-
-        tts.setPitch(pitch);
-        tts.setSpeechRate(rate);
-    }
-
-    private static void populateVoices(
-            TextToSpeech tts,
-            Locale locale,
-            String selectedVoiceName,
-            Spinner spinner,
-            ArrayAdapter<String> adapter,
-            ArrayList<String> labels,
-            ArrayList<Voice> objects
-    ) {
-
-        labels.clear();
-        objects.clear();
-
-        labels.add("Systeemstem");
-        objects.add(null);
-
-        if (tts != null && tts.getVoices() != null) {
-
-            ArrayList<Voice> filtered =
-                    new ArrayList<>();
-
-            for (Voice voice : tts.getVoices()) {
-
-                Locale voiceLocale =
-                        voice.getLocale();
-
-                boolean languageMatch =
-                        voiceLocale.getLanguage()
-                                .equalsIgnoreCase(
-                                        locale.getLanguage()
-                                );
-
-                boolean countryMatch =
-                        locale.getCountry().isEmpty()
-                                || voiceLocale.getCountry()
-                                .equalsIgnoreCase(
-                                        locale.getCountry()
-                                );
-
-                if (languageMatch && countryMatch) {
-                    filtered.add(voice);
-                }
-            }
-
-            Collections.sort(
-                    filtered,
-                    new Comparator<Voice>() {
-                        @Override
-                        public int compare(
-                                Voice a,
-                                Voice b
-                        ) {
-                            return a.getName()
-                                    .compareToIgnoreCase(
-                                            b.getName()
-                                    );
-                        }
-                    }
-            );
-
-            for (Voice voice : filtered) {
-
-                String type =
-                        voice.isNetworkConnectionRequired()
-                                ? "online"
-                                : "lokaal";
-
-                labels.add(
-                        voice.getName()
-                                + " • "
-                                + type
-                );
-
-                objects.add(voice);
-            }
-        }
-
-        adapter.notifyDataSetChanged();
-
-        int selection = 0;
-
-        if (selectedVoiceName != null
-                && !selectedVoiceName.isEmpty()) {
-
-            for (int i = 1;
-                 i < objects.size();
-                 i++) {
-
-                Voice voice = objects.get(i);
-
-                if (voice != null
-                        && selectedVoiceName.equals(
-                        voice.getName()
-                )) {
-                    selection = i;
-                    break;
-                }
-            }
-        }
-
-        spinner.setSelection(selection);
-    }
-
-    private static int clamp(int value) {
-        return Math.max(0, Math.min(100, value));
+                    Toast.makeText(
+                            activity,
+                            "Cloudstem opgeslagen.",
+                            Toast.LENGTH_SHORT
+                    ).show();
+                })
+                .setNegativeButton("Annuleren", null)
+                .show();
     }
 }

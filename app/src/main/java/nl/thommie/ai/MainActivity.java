@@ -10,6 +10,8 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -52,6 +54,16 @@ public class MainActivity extends Activity {
     private SpeechRecognizer speechRecognizer;
     private MediaPlayer mediaPlayer;
     private String lastAssistantReply = "";
+    private final Handler mainHandler =
+            new Handler(Looper.getMainLooper());
+
+    private boolean wakeWordEnabled = true;
+    private boolean wakeWordListening = false;
+    private boolean commandListening = false;
+    private boolean ignoreNextRecognitionError = false;
+    private boolean appVisible = false;
+    private boolean chatBusy = false;
+    private boolean pendingManualPermission = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,6 +83,7 @@ public class MainActivity extends Activity {
 
         buildUi();
         initSpeechRecognizer();
+        wakeWordEnabled = WakeWordSettings.enabled(this);
 
         if (SecurePrefs.loadApiKey(this).isEmpty()) {
             showApiKeyDialog(true);
@@ -116,7 +129,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.5  •  PERSONAL AI TERMINAL"
+                "v0.6  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -156,8 +169,8 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.5 gebruikt OpenAI cloud voice, "
-                        + "blijvend gespreksgeheugen en lokaal profielgeheugen."
+                        + "MAATJE v0.6 gebruikt OpenAI cloud voice, "
+                        + "blijvend gespreksgeheugen, lokaal profielgeheugen en \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
         transcript.setTextSize(16);
@@ -366,6 +379,7 @@ public class MainActivity extends Activity {
                                     + e.getMessage()
                     );
                     setBusy(false, "ERROR");
+                    scheduleWakeListening(700);
                 });
             }
         });
@@ -386,17 +400,23 @@ public class MainActivity extends Activity {
                     public void onReadyForSpeech(
                             Bundle params
                     ) {
-                        setBusy(
-                                false,
-                                "LISTENING"
-                        );
+                        if (wakeWordListening) {
+                            stateText.setText(
+                                    "STANDBY • HEY MAATJE"
+                            );
+                        } else {
+                            stateText.setText(
+                                    "LISTENING"
+                            );
+                        }
                     }
 
                     public void onBeginningOfSpeech() {
-                        setBusy(
-                                false,
-                                "LISTENING"
-                        );
+                        if (!wakeWordListening) {
+                            stateText.setText(
+                                    "LISTENING"
+                            );
+                        }
                     }
 
                     public void onRmsChanged(
@@ -408,26 +428,71 @@ public class MainActivity extends Activity {
                     ) {}
 
                     public void onEndOfSpeech() {
-                        stateText.setText(
-                                "PROCESSING SPEECH"
-                        );
+                        if (wakeWordListening) {
+                            stateText.setText(
+                                    "CHECKING"
+                            );
+                        } else if (commandListening) {
+                            stateText.setText(
+                                    "PROCESSING SPEECH"
+                            );
+                        }
                     }
 
                     public void onError(int error) {
-                        setBusy(false, "READY");
+                        if (ignoreNextRecognitionError) {
+                            ignoreNextRecognitionError = false;
+                            return;
+                        }
 
-                        Toast.makeText(
-                                MainActivity.this,
-                                "Spraakherkenning fout: "
-                                        + error,
-                                Toast.LENGTH_SHORT
-                        ).show();
+                        boolean wasWake =
+                                wakeWordListening;
+
+                        boolean wasCommand =
+                                commandListening;
+
+                        wakeWordListening = false;
+                        commandListening = false;
+
+                        if (wasWake) {
+                            stateText.setText(
+                                    "STANDBY • HEY MAATJE"
+                            );
+
+                            scheduleWakeListening(
+                                    error
+                                            == SpeechRecognizer.ERROR_NO_MATCH
+                                            ? 200
+                                            : 700
+                            );
+                            return;
+                        }
+
+                        if (wasCommand) {
+                            setBusy(false, "READY");
+
+                            Toast.makeText(
+                                    MainActivity.this,
+                                    "Spraakherkenning fout: "
+                                            + error,
+                                    Toast.LENGTH_SHORT
+                            ).show();
+
+                            scheduleWakeListening(700);
+                        }
                     }
 
                     public void onResults(
                             Bundle results
                     ) {
-                        setBusy(false, "READY");
+                        boolean wasWake =
+                                wakeWordListening;
+
+                        boolean wasCommand =
+                                commandListening;
+
+                        wakeWordListening = false;
+                        commandListening = false;
 
                         ArrayList<String> list =
                                 results.getStringArrayList(
@@ -435,15 +500,31 @@ public class MainActivity extends Activity {
                                                 .RESULTS_RECOGNITION
                                 );
 
-                        if (list != null
-                                && !list.isEmpty()) {
-                            String value = list.get(0);
-                            input.setText(value);
-                            input.setSelection(
-                                    input.length()
-                            );
-                            ask(value);
-                            input.setText("");
+                        if (wasWake) {
+                            handleWakeResults(list);
+                            return;
+                        }
+
+                        if (wasCommand) {
+                            setBusy(false, "READY");
+
+                            if (list != null
+                                    && !list.isEmpty()) {
+                                String value =
+                                        list.get(0);
+
+                                input.setText(value);
+                                input.setSelection(
+                                        input.length()
+                                );
+
+                                ask(value);
+                                input.setText("");
+                            } else {
+                                scheduleWakeListening(
+                                        400
+                                );
+                            }
                         }
                     }
 
@@ -463,6 +544,8 @@ public class MainActivity extends Activity {
         if (checkSelfPermission(
                 Manifest.permission.RECORD_AUDIO
         ) != PackageManager.PERMISSION_GRANTED) {
+            pendingManualPermission = true;
+
             requestPermissions(
                     new String[]{
                             Manifest.permission.RECORD_AUDIO
@@ -471,6 +554,8 @@ public class MainActivity extends Activity {
             );
             return;
         }
+
+        pendingManualPermission = false;
 
         if (speechRecognizer == null) {
             Toast.makeText(
@@ -482,7 +567,85 @@ public class MainActivity extends Activity {
         }
 
         stopPlayer();
+        stopRecognitionSession();
 
+        mainHandler.postDelayed(
+                this::startCommandListeningInternal,
+                250
+        );
+    }
+
+    private void startCommandListeningInternal() {
+        if (!appVisible
+                || speechRecognizer == null
+                || chatBusy) {
+            return;
+        }
+
+        wakeWordListening = false;
+        commandListening = true;
+
+        stateText.setText("LISTENING");
+
+        try {
+            speechRecognizer.startListening(
+                    createRecognizerIntent(false)
+            );
+        } catch (Exception e) {
+            commandListening = false;
+
+            Toast.makeText(
+                    this,
+                    "Luisteren starten mislukt: "
+                            + e.getMessage(),
+                    Toast.LENGTH_SHORT
+            ).show();
+
+            scheduleWakeListening(700);
+        }
+    }
+
+    private void startWakeListening() {
+        wakeWordEnabled =
+                WakeWordSettings.enabled(this);
+
+        if (!wakeWordEnabled
+                || !appVisible
+                || chatBusy
+                || mediaPlayer != null
+                || speechRecognizer == null
+                || wakeWordListening
+                || commandListening) {
+            return;
+        }
+
+        if (checkSelfPermission(
+                Manifest.permission.RECORD_AUDIO
+        ) != PackageManager.PERMISSION_GRANTED) {
+            stateText.setText("MIC PERMISSION");
+            return;
+        }
+
+        wakeWordListening = true;
+        commandListening = false;
+
+        stateText.setText(
+                "STANDBY • HEY MAATJE"
+        );
+
+        try {
+            speechRecognizer.startListening(
+                    createRecognizerIntent(false)
+            );
+        } catch (Exception e) {
+            wakeWordListening = false;
+            scheduleWakeListening(1000);
+        }
+    }
+
+    private Intent createRecognizerIntent(
+            boolean partialResults
+    ) {
         Intent intent =
                 new Intent(
                         RecognizerIntent
@@ -504,10 +667,134 @@ public class MainActivity extends Activity {
         intent.putExtra(
                 RecognizerIntent
                         .EXTRA_PARTIAL_RESULTS,
-                false
+                partialResults
         );
 
-        speechRecognizer.startListening(intent);
+        intent.putExtra(
+                RecognizerIntent.EXTRA_MAX_RESULTS,
+                5
+        );
+
+        return intent;
+    }
+
+    private void handleWakeResults(
+            ArrayList<String> results
+    ) {
+        String command =
+                extractWakeCommand(results);
+
+        if (command == null) {
+            stateText.setText(
+                    "STANDBY • HEY MAATJE"
+            );
+
+            scheduleWakeListening(250);
+            return;
+        }
+
+        stateText.setText("YES?");
+
+        if (!command.isEmpty()) {
+            ask(command);
+            return;
+        }
+
+        mainHandler.postDelayed(
+                this::startCommandListeningInternal,
+                300
+        );
+    }
+
+    private String extractWakeCommand(
+            ArrayList<String> results
+    ) {
+        if (results == null) return null;
+
+        String[] triggers = {
+                "hey maatje",
+                "hee maatje",
+                "hé maatje"
+        };
+
+        for (String result : results) {
+            if (result == null) continue;
+
+            String normalized =
+                    result.toLowerCase(java.util.Locale.ROOT)
+                            .replaceAll(
+                                    "[^\\\\p{L}\\\\p{N}\\\\s]",
+                                    " "
+                            )
+                            .replaceAll(
+                                    "\\\\s+",
+                                    " "
+                            )
+                            .trim();
+
+            for (String trigger : triggers) {
+                int index =
+                        normalized.indexOf(trigger);
+
+                if (index >= 0) {
+                    return normalized
+                            .substring(
+                                    index
+                                            + trigger.length()
+                            )
+                            .trim();
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private void scheduleWakeListening(
+            long delayMs
+    ) {
+        mainHandler.removeCallbacks(
+                wakeRestartRunnable
+        );
+
+        if (!wakeWordEnabled
+                || !appVisible
+                || chatBusy) {
+            return;
+        }
+
+        mainHandler.postDelayed(
+                wakeRestartRunnable,
+                delayMs
+        );
+    }
+
+    private final Runnable wakeRestartRunnable =
+            new Runnable() {
+                @Override
+                public void run() {
+                    startWakeListening();
+                }
+            };
+
+    private void stopRecognitionSession() {
+        mainHandler.removeCallbacks(
+                wakeRestartRunnable
+        );
+
+        if (speechRecognizer == null) return;
+
+        if (wakeWordListening
+                || commandListening) {
+            ignoreNextRecognitionError = true;
+        }
+
+        wakeWordListening = false;
+        commandListening = false;
+
+        try {
+            speechRecognizer.cancel();
+        } catch (Exception ignored) {}
     }
 
     @Override
@@ -527,7 +814,13 @@ public class MainActivity extends Activity {
                 && grantResults[0]
                 == PackageManager
                 .PERMISSION_GRANTED) {
-            startListening();
+
+            if (pendingManualPermission) {
+                pendingManualPermission = false;
+                startListening();
+            } else {
+                scheduleWakeListening(300);
+            }
         }
     }
 
@@ -536,12 +829,13 @@ public class MainActivity extends Activity {
                 "API-key",
                 "Stem & audio",
                 "Geheugen",
-                "Persoonlijkheid"
+                "Persoonlijkheid",
+                "Wake word"
         };
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.5 – Instellingen"
+                        "MAATJE v0.6 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -555,8 +849,35 @@ public class MainActivity extends Activity {
                                 );
                             } else if (which == 2) {
                                 showMemoryDialog();
-                            } else {
+                            } else if (which == 3) {
                                 PersonalitySettings.show(this);
+                            } else {
+                                WakeWordSettings.show(
+                                        this,
+                                        enabled -> {
+                                            wakeWordEnabled = enabled;
+
+                                            if (enabled) {
+                                                if (checkSelfPermission(
+                                                        Manifest.permission.RECORD_AUDIO
+                                                ) != PackageManager.PERMISSION_GRANTED) {
+                                                    pendingManualPermission = false;
+
+                                                    requestPermissions(
+                                                            new String[]{
+                                                                    Manifest.permission.RECORD_AUDIO
+                                                            },
+                                                            REQ_AUDIO
+                                                    );
+                                                } else {
+                                                    scheduleWakeListening(250);
+                                                }
+                                            } else {
+                                                stopRecognitionSession();
+                                                stateText.setText("READY");
+                                            }
+                                        }
+                                );
                             }
                         }
                 )
@@ -616,7 +937,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.5 – Geheugen"
+                                "MAATJE v0.6 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -706,7 +1027,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.5 – API"
+                                "MAATJE v0.6 – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -789,6 +1110,7 @@ public class MainActivity extends Activity {
             boolean busy,
             String label
     ) {
+        chatBusy = busy;
         stateText.setText(label);
         micButton.setEnabled(!busy);
         sendButton.setEnabled(!busy);
@@ -833,13 +1155,17 @@ public class MainActivity extends Activity {
 
     private void speak(String text) {
         if (!VoiceSettings.autoSpeak(this)) {
+            scheduleWakeListening(350);
             return;
         }
 
         String key =
                 SecurePrefs.loadApiKey(this);
 
-        if (key.isEmpty()) return;
+        if (key.isEmpty()) {
+            scheduleWakeListening(350);
+            return;
+        }
 
         String cleaned =
                 text.replace("```", "")
@@ -872,14 +1198,16 @@ public class MainActivity extends Activity {
                 );
 
             } catch (Exception e) {
-                runOnUiThread(() ->
-                        Toast.makeText(
-                                MainActivity.this,
-                                "Stemfout: "
-                                        + e.getMessage(),
-                                Toast.LENGTH_LONG
-                        ).show()
-                );
+                runOnUiThread(() -> {
+                    Toast.makeText(
+                            MainActivity.this,
+                            "Stemfout: "
+                                    + e.getMessage(),
+                            Toast.LENGTH_LONG
+                    ).show();
+
+                    scheduleWakeListening(700);
+                });
             }
         });
     }
@@ -955,6 +1283,7 @@ public class MainActivity extends Activity {
                         }
 
                         file.delete();
+                        scheduleWakeListening(350);
                     }
             );
 
@@ -967,6 +1296,7 @@ public class MainActivity extends Activity {
                         }
 
                         file.delete();
+                        scheduleWakeListening(700);
                         return true;
                     }
             );
@@ -1002,8 +1332,29 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+
+        appVisible = true;
+        wakeWordEnabled =
+                WakeWordSettings.enabled(this);
+
+        scheduleWakeListening(600);
+    }
+
+    @Override
+    protected void onPause() {
+        appVisible = false;
+        stopRecognitionSession();
+
+        super.onPause();
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
+
+        mainHandler.removeCallbacksAndMessages(null);
 
         chatExecutor.shutdownNow();
         voiceExecutor.shutdownNow();

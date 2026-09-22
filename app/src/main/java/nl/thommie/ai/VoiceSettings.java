@@ -78,7 +78,7 @@ final class VoiceSettings {
         TextView engineInfo = new TextView(activity);
         engineInfo.setText(
                 "Cloud voice via OpenAI gpt-4o-mini-tts.\n"
-                + "Dit vervangt de Samsung-voorleesstem voor THOMMIE AI."
+                + "Dit vervangt de Samsung-voorleesstem voor MAATJE."
         );
         engineInfo.setPadding(0, 0, 0, 20);
         box.addView(engineInfo);
@@ -213,7 +213,7 @@ final class VoiceSettings {
         });
 
         new AlertDialog.Builder(activity)
-                .setTitle("THOMMIE AI v0.4 – Stem & audio")
+                .setTitle("MAATJE v0.5 – Stem & audio")
                 .setView(scroll)
                 .setPositiveButton("Opslaan", (d, which) -> {
                     String voice =

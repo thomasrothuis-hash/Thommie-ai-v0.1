@@ -51,6 +51,7 @@ public class MainActivity extends Activity {
     private Button sendButton;
     private SpeechRecognizer speechRecognizer;
     private MediaPlayer mediaPlayer;
+    private String lastAssistantReply = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,7 +88,7 @@ public class MainActivity extends Activity {
         header.setGravity(Gravity.CENTER_VERTICAL);
 
         TextView title = new TextView(this);
-        title.setText("THOMMIE AI");
+        title.setText("MAATJE");
         title.setTextColor(TEXT);
         title.setTextSize(25);
         title.setTypeface(Typeface.DEFAULT_BOLD);
@@ -115,7 +116,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.4  •  PERSONAL AI TERMINAL"
+                "v0.5  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -155,7 +156,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "THOMMIE AI v0.4 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.5 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen en lokaal profielgeheugen."
         );
         transcript.setTextColor(TEXT);
@@ -267,6 +268,29 @@ public class MainActivity extends Activity {
     }
 
     private void ask(String q) {
+        PersonalitySettings.CommandResult personalityCommand =
+                PersonalitySettings.handleCommand(this, q);
+
+        if (personalityCommand.handled) {
+            append("\n\nJIJ\n" + q);
+            append("\n\nMAATJE\n" + personalityCommand.message);
+            lastAssistantReply = personalityCommand.message;
+            speak(personalityCommand.message);
+            return;
+        }
+
+        if (PersonalitySettings.captureHumorFeedback(
+                this,
+                q,
+                lastAssistantReply
+        )) {
+            Toast.makeText(
+                    this,
+                    "Humorprofiel bijgewerkt.",
+                    Toast.LENGTH_SHORT
+            ).show();
+        }
+
         String key = SecurePrefs.loadApiKey(this);
 
         if (key.isEmpty()) {
@@ -321,14 +345,16 @@ public class MainActivity extends Activity {
                                 "gpt-5.6-luna",
                                 conversationId,
                                 q,
-                                profileMemory
+                                profileMemory,
+                                PersonalitySettings.prompt(MainActivity.this)
                         );
 
                 runOnUiThread(() -> {
                     append(
-                            "\n\nTHOMMIE AI\n"
+                            "\n\nMAATJE\n"
                                     + reply.text
                     );
+                    lastAssistantReply = reply.text;
                     setBusy(false, "READY");
                     speak(reply.text);
                 });
@@ -509,12 +535,13 @@ public class MainActivity extends Activity {
         String[] options = {
                 "API-key",
                 "Stem & audio",
-                "Geheugen"
+                "Geheugen",
+                "Persoonlijkheid"
         };
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "THOMMIE AI v0.4 – Instellingen"
+                        "MAATJE v0.5 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -526,8 +553,10 @@ public class MainActivity extends Activity {
                                         this,
                                         this::testCloudVoice
                                 );
-                            } else {
+                            } else if (which == 2) {
                                 showMemoryDialog();
+                            } else {
+                                PersonalitySettings.show(this);
                             }
                         }
                 )
@@ -587,7 +616,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "THOMMIE AI v0.4 – Geheugen"
+                                "MAATJE v0.5 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -677,7 +706,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "THOMMIE AI v0.4 – API"
+                                "MAATJE v0.5 – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -822,7 +851,9 @@ public class MainActivity extends Activity {
         float speed =
                 VoiceSettings.speed(this);
         String style =
-                VoiceSettings.style(this);
+                VoiceSettings.style(this)
+                        + "\n"
+                        + PersonalitySettings.voiceStyle(this);
 
         voiceExecutor.submit(() -> {
             try {
@@ -878,7 +909,7 @@ public class MainActivity extends Activity {
                         OpenAiSpeech.synthesize(
                                 MainActivity.this,
                                 key,
-                                "Goedemiddag. THOMMIE AI is online. "
+                                "Goedemiddag. MAATJE is online. "
                                         + "Alle systemen functioneren normaal.",
                                 voice,
                                 instructions,

@@ -31,8 +31,8 @@ final class OpenAiClient {
 
         JSONObject body = new JSONObject();
         JSONObject metadata = new JSONObject();
-        metadata.put("app", "THOMMIE AI");
-        metadata.put("version", "0.4");
+        metadata.put("app", "MAATJE");
+        metadata.put("version", "0.5");
         body.put("metadata", metadata);
 
         writeJson(conn, body);
@@ -53,7 +53,9 @@ final class OpenAiClient {
         String id = root.optString("id", "");
 
         if (id.isEmpty()) {
-            throw new Exception("Conversation API gaf geen conversation-id terug.");
+            throw new Exception(
+                    "Conversation API gaf geen conversation-id terug."
+            );
         }
 
         return id;
@@ -64,7 +66,8 @@ final class OpenAiClient {
             String model,
             String conversationId,
             String input,
-            String profileMemory
+            String profileMemory,
+            String personalityPrompt
     ) throws Exception {
 
         URL url = new URL("https://api.openai.com/v1/responses");
@@ -79,13 +82,21 @@ final class OpenAiClient {
         }
 
         String instructions =
-                "Je bent THOMMIE AI, een persoonlijke assistent op een dedicated Android-toestel. "
-                + "Antwoord standaard in het Nederlands. Wees beheerst, intelligent, direct en technisch competent. "
-                + "Geen overdreven enthousiasme, geen verkooppraat, geen onnodige emoji's en geen lange beleefdheidsintroducties. "
+                "Je bent MAATJE, een persoonlijke assistent op een dedicated Android-toestel. "
+                + "Antwoord standaard in het Nederlands. "
+                + "Wees slim, relaxed, direct, technisch competent en menselijk. "
+                + "Geen overdreven klantenservice-toon, geen onnodige emoji's en geen lange beleefdheidsintroducties. "
                 + "Gebruik korte natuurlijke bevestigingen waar passend. "
-                + "Als de gebruiker technisch doorvraagt, mag je diep gaan.";
+                + "Als de gebruiker technisch doorvraagt, mag je diep gaan. "
+                + "Je hoeft niet overdreven netjes te praten; normale spreektaal en passend gevloek zijn toegestaan.";
 
-        if (profileMemory != null && !profileMemory.trim().isEmpty()) {
+        if (personalityPrompt != null
+                && !personalityPrompt.trim().isEmpty()) {
+            instructions += "\n\n" + personalityPrompt.trim();
+        }
+
+        if (profileMemory != null
+                && !profileMemory.trim().isEmpty()) {
             instructions +=
                     "\n\nLangetermijngeheugen over de gebruiker. "
                     + "Gebruik dit alleen als het relevant is en doe geen aannames buiten deze notities:\n"
@@ -123,6 +134,7 @@ final class OpenAiClient {
             throws Exception {
         HttpURLConnection conn =
                 (HttpURLConnection) url.openConnection();
+
         conn.setRequestMethod("POST");
         conn.setConnectTimeout(20000);
         conn.setReadTimeout(90000);
@@ -135,6 +147,7 @@ final class OpenAiClient {
                 "Content-Type",
                 "application/json"
         );
+
         return conn;
     }
 

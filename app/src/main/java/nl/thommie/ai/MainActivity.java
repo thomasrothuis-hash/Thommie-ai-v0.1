@@ -41,6 +41,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private TextView stateText;
     private TextView transcript;
+    private ScrollView transcriptScroll;
     private EditText input;
     private Button micButton;
     private Button sendButton;
@@ -117,14 +118,14 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         stateText.setLetterSpacing(.20f);
         root.addView(stateText);
 
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
+        transcriptScroll = new ScrollView(this);
+        transcriptScroll.setFillViewport(true);
         GradientDrawable panelBg = roundRect(PANEL, 22, Color.rgb(31, 43, 43));
-        scroll.setBackground(panelBg);
+        transcriptScroll.setBackground(panelBg);
         LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(-1, 0, 1f);
         scrollLp.topMargin = dp(20);
         scrollLp.bottomMargin = dp(16);
-        root.addView(scroll, scrollLp);
+        root.addView(transcriptScroll, scrollLp);
 
         transcript = new TextView(this);
         transcript.setText("Welkom.\n\nTik op de microfoon of typ een bericht. In v0.1 gebruikt de app Android voor spraakherkenning en voorlezen; je tekstvraag gaat via de OpenAI Responses API.");
@@ -132,7 +133,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         transcript.setTextSize(16);
         transcript.setLineSpacing(0, 1.25f);
         transcript.setPadding(dp(18), dp(18), dp(18), dp(18));
-        scroll.addView(transcript);
+        transcriptScroll.addView(transcript);
 
         LinearLayout composer = new LinearLayout(this);
         composer.setOrientation(LinearLayout.HORIZONTAL);
@@ -310,6 +311,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     private void append(String text) {
         transcript.append(text);
+        if (transcriptScroll != null) {
+            transcriptScroll.post(() ->
+                    transcriptScroll.fullScroll(View.FOCUS_DOWN));
+        }
     }
 
     private void speak(String text) {

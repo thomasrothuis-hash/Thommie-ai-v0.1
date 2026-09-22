@@ -2,6 +2,10 @@ plugins {
     id 'com.android.application'
 }
 
+def ciVersionCode = (System.getenv("VERSION_CODE") ?: "1").toInteger()
+def keystoreFile = System.getenv("KEYSTORE_FILE")
+def keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+
 android {
     namespace 'nl.thommie.ai'
     compileSdk 35
@@ -10,12 +14,27 @@ android {
         applicationId 'nl.thommie.ai'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '0.1'
+        versionCode ciVersionCode
+        versionName '0.2'
+    }
+
+    signingConfigs {
+        release {
+            if (keystoreFile && keystorePassword) {
+                storeFile file(keystoreFile)
+                storePassword keystorePassword
+                storeType 'PKCS12'
+                keyAlias 'thommieai'
+                keyPassword keystorePassword
+            }
+        }
     }
 
     buildTypes {
         release {
+            if (keystoreFile && keystorePassword) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }

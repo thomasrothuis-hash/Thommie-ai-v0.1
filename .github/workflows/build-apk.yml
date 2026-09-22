@@ -1,4 +1,4 @@
-name: Build THOMMIE AI v0.1 APK
+name: Build THOMMIE AI v0.2 APK
 
 on:
   workflow_dispatch:
@@ -26,8 +26,6 @@ jobs:
         shell: bash
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          echo "Using: $SDKMANAGER"
-          "$SDKMANAGER" --version
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
@@ -36,16 +34,35 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build debug APK
-        run: gradle --no-daemon assembleDebug --stacktrace
+      - name: Restore permanent signing key
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_B64"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/thommie-release.p12"
+
+      - name: Build signed release APK
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/thommie-release.p12
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: |
+          test -n "$KEYSTORE_PASSWORD"
+          gradle --no-daemon assembleRelease --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk THOMMIE_AI_v0.1.apk
+        run: cp app/build/outputs/apk/release/app-release.apk THOMMIE_AI_v0.2.apk
+
+      - name: Verify APK signature
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify \
+            --print-certs THOMMIE_AI_v0.2.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: THOMMIE_AI_v0.1
-          path: THOMMIE_AI_v0.1.apk
+          name: THOMMIE_AI_v0.2
+          path: THOMMIE_AI_v0.2.apk
           if-no-files-found: error
           retention-days: 30

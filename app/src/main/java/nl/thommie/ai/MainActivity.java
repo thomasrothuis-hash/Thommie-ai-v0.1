@@ -94,7 +94,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         root.addView(header);
 
         TextView version = new TextView(this);
-        version.setText("v0.1  •  PERSONAL AI TERMINAL");
+        version.setText("v0.2  •  PERSONAL AI TERMINAL");
         version.setTextColor(MUTED);
         version.setTextSize(11);
         version.setLetterSpacing(.16f);
@@ -128,7 +128,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         root.addView(transcriptScroll, scrollLp);
 
         transcript = new TextView(this);
-        transcript.setText("Welkom.\n\nTik op de microfoon of typ een bericht. In v0.1 gebruikt de app Android voor spraakherkenning en voorlezen; je tekstvraag gaat via de OpenAI Responses API.");
+        transcript.setText("Welkom.\n\nTik op de microfoon of typ een bericht. In v0.2 gebruikt de app Android voor spraakherkenning en voorlezen; je tekstvraag gaat via de OpenAI Responses API.");
         transcript.setTextColor(TEXT);
         transcript.setTextSize(16);
         transcript.setLineSpacing(0, 1.25f);
@@ -271,7 +271,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         box.addView(note);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("THOMMIE AI v0.1 – API")
+                .setTitle("THOMMIE AI v0.2 – API")
                 .setView(box)
                 .setPositiveButton("Opslaan", null)
                 .setNegativeButton(mandatory ? "Later" : "Annuleren", null)

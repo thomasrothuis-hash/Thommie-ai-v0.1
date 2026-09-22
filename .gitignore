@@ -4,3 +4,8 @@ local.properties
 **/build/
 *.iml
 .DS_Store
+
+*.jks
+*.p12
+*.pem
+keystore.b64

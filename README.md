@@ -1,8 +1,8 @@
-# THOMMIE AI v0.1
+# THOMMIE AI v0.2
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
 
-## v0.1 features
+## v0.2 features
 - Full-screen dark OLED-style interface
 - Text chat through OpenAI Responses API
 - Android speech recognition (Dutch) via microphone button
@@ -39,4 +39,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `THOMMIE_AI_v0.1.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `THOMMIE_AI_v0.2.apk` as a workflow artifact.

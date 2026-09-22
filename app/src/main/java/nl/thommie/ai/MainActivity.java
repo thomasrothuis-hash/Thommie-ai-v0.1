@@ -88,12 +88,12 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         header.addView(title, new LinearLayout.LayoutParams(0, dp(50), 1f));
 
         Button settings = button("⚙", PANEL, TEXT);
-        settings.setOnClickListener(v -> showApiKeyDialog(false));
+        settings.setOnClickListener(v -> showSettingsMenu());
         header.addView(settings, new LinearLayout.LayoutParams(dp(54), dp(46)));
         root.addView(header);
 
         TextView version = new TextView(this);
-        version.setText("v0.2  •  PERSONAL AI TERMINAL");
+        version.setText("v0.3  •  PERSONAL AI TERMINAL");
         version.setTextColor(MUTED);
         version.setTextSize(11);
         version.setLetterSpacing(.16f);
@@ -120,7 +120,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         GradientDrawable panelBg = roundRect(PANEL, 22, Color.rgb(31, 43, 43));
 
         transcript = new TextView(this);
-        transcript.setText("Welkom.\n\nTik op de microfoon of typ een bericht. In v0.2 gebruikt de app Android voor spraakherkenning en voorlezen; je tekstvraag gaat via de OpenAI Responses API.");
+        transcript.setText("Welkom.\n\nTik op de microfoon of typ een bericht. In v0.3 gebruikt de app Android voor spraakherkenning en voorlezen; je tekstvraag gaat via de OpenAI Responses API.");
         transcript.setTextColor(TEXT);
         transcript.setTextSize(16);
         transcript.setLineSpacing(0, 1.25f);
@@ -253,6 +253,25 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         }
     }
 
+    private void showSettingsMenu() {
+        String[] options = {
+                "API-key",
+                "Stem & audio"
+        };
+
+        new AlertDialog.Builder(this)
+                .setTitle("THOMMIE AI v0.3 – Instellingen")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        showApiKeyDialog(false);
+                    } else {
+                        VoiceSettings.show(this, tts, ttsReady);
+                    }
+                })
+                .setNegativeButton("Sluiten", null)
+                .show();
+    }
+
     private void showApiKeyDialog(boolean mandatory) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -271,7 +290,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         box.addView(note);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("THOMMIE AI v0.2 – API")
+                .setTitle("THOMMIE AI v0.3 – API")
                 .setView(box)
                 .setPositiveButton("Opslaan", null)
                 .setNegativeButton(mandatory ? "Later" : "Annuleren", null)
@@ -325,6 +344,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     private void speak(String text) {
+        if (!VoiceSettings.autoSpeak(this)) return;
         if (!ttsReady || tts == null) return;
         String cleaned = text.replace("```", "").replace("**", "");
         tts.speak(cleaned, TextToSpeech.QUEUE_FLUSH, null, "thommie_ai_reply");
@@ -333,9 +353,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     @Override
     public void onInit(int status) {
         if (status == TextToSpeech.SUCCESS) {
-            int result = tts.setLanguage(new Locale("nl", "NL"));
-            tts.setSpeechRate(1.03f);
-            ttsReady = result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED;
+            ttsReady = true;
+            VoiceSettings.apply(this, tts);
+        } else {
+            ttsReady = false;
         }
     }
 

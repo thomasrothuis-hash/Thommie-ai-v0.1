@@ -129,7 +129,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.6  •  PERSONAL AI TERMINAL"
+                "v0.6.1  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -169,7 +169,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.6 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.6.1 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -530,7 +530,50 @@ public class MainActivity extends Activity {
 
                     public void onPartialResults(
                             Bundle partialResults
-                    ) {}
+                    ) {
+                        if (!wakeWordListening) {
+                            return;
+                        }
+
+                        ArrayList<String> list =
+                                partialResults.getStringArrayList(
+                                        SpeechRecognizer
+                                                .RESULTS_RECOGNITION
+                                );
+
+                        String command =
+                                extractWakeCommand(list);
+
+                        if (command == null) {
+                            return;
+                        }
+
+                        wakeWordListening = false;
+                        commandListening = false;
+                        ignoreNextRecognitionError = true;
+
+                        stateText.setText("YES?");
+
+                        try {
+                            speechRecognizer.cancel();
+                        } catch (Exception ignored) {}
+
+                        final String wakeCommand =
+                                command;
+
+                        mainHandler.postDelayed(
+                                () -> {
+                                    ignoreNextRecognitionError = false;
+
+                                    if (!wakeCommand.isEmpty()) {
+                                        ask(wakeCommand);
+                                    } else {
+                                        startCommandListeningInternal();
+                                    }
+                                },
+                                650
+                        );
+                    }
 
                     public void onEvent(
                             int eventType,
@@ -635,7 +678,7 @@ public class MainActivity extends Activity {
 
         try {
             speechRecognizer.startListening(
-                    createRecognizerIntent(false)
+                    createRecognizerIntent(true)
             );
         } catch (Exception e) {
             wakeWordListening = false;
@@ -714,7 +757,12 @@ public class MainActivity extends Activity {
         String[] triggers = {
                 "hey maatje",
                 "hee maatje",
-                "hé maatje"
+                "hé maatje",
+                "hey maartje",
+                "hee maartje",
+                "hé maartje",
+                "hey maatie",
+                "hee maatie"
         };
 
         for (String result : results) {
@@ -835,7 +883,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.6 – Instellingen"
+                        "MAATJE v0.6.1 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -937,7 +985,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.6 – Geheugen"
+                                "MAATJE v0.6.1 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1027,7 +1075,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.6 – API"
+                                "MAATJE v0.6.1 – API"
                         )
                         .setView(box)
                         .setPositiveButton(

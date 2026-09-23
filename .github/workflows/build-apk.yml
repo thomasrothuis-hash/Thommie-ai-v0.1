@@ -42,8 +42,7 @@ jobs:
           curl -L --fail --retry 3             "https://alphacephei.com/vosk/models/vosk-model-small-nl-0.22.zip"             -o /tmp/vosk-nl/model.zip
           unzip -q /tmp/vosk-nl/model.zip -d /tmp/vosk-nl
           mv /tmp/vosk-nl/vosk-model-small-nl-0.22 app/src/main/assets/model-nl
-          printf '%s
-' "maatje-nl-v0.22" > app/src/main/assets/model-nl/uuid
+          echo "maatje-nl-v0.22" > app/src/main/assets/model-nl/uuid
           test -f app/src/main/assets/model-nl/am/final.mdl
           test -f app/src/main/assets/model-nl/conf/model.conf
           test -f app/src/main/assets/model-nl/uuid

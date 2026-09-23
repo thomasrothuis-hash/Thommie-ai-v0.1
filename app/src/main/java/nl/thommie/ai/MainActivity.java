@@ -35,11 +35,12 @@ import java.util.concurrent.Executors;
 public class MainActivity extends Activity {
 
     private static final int REQ_AUDIO = 1001;
-    private static final int BG = Color.rgb(5, 7, 9);
-    private static final int PANEL = Color.rgb(13, 18, 20);
-    private static final int MINT = Color.rgb(117, 243, 208);
-    private static final int TEXT = Color.rgb(235, 245, 242);
-    private static final int MUTED = Color.rgb(136, 154, 150);
+    private static final int BG = Color.rgb(4, 8, 5);
+    private static final int PANEL = Color.rgb(9, 17, 11);
+    private static final int MINT = Color.rgb(54, 220, 104);
+    private static final int TEXT = Color.rgb(216, 240, 222);
+    private static final int MUTED = Color.rgb(105, 139, 113);
+    private static final int BORDER = Color.rgb(28, 63, 38);
 
     private final ExecutorService chatExecutor =
             Executors.newSingleThreadExecutor();
@@ -52,6 +53,7 @@ public class MainActivity extends Activity {
     private EditText input;
     private Button micButton;
     private Button sendButton;
+    private Button replayButton;
     private SpeechRecognizer speechRecognizer;
     private MediaPlayer mediaPlayer;
     private OfflineWakeWord offlineWakeWord;
@@ -176,9 +178,14 @@ public class MainActivity extends Activity {
 
         TextView title = new TextView(this);
         title.setText("MAATJE");
-        title.setTextColor(TEXT);
+        title.setTextColor(MINT);
         title.setTextSize(25);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setTypeface(
+                Typeface.create(
+                        Typeface.MONOSPACE,
+                        Typeface.BOLD
+                )
+        );
         header.addView(
                 title,
                 new LinearLayout.LayoutParams(
@@ -188,7 +195,7 @@ public class MainActivity extends Activity {
                 )
         );
 
-        Button settings = button("⚙", PANEL, TEXT);
+        Button settings = button("⚙", PANEL, MINT);
         settings.setOnClickListener(
                 v -> showSettingsMenu()
         );
@@ -203,10 +210,11 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.8.3  •  PERSONAL AI TERMINAL"
+                "v0.8.4  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
+        version.setTypeface(Typeface.MONOSPACE);
         version.setLetterSpacing(.16f);
         root.addView(version);
 
@@ -229,7 +237,12 @@ public class MainActivity extends Activity {
         stateText.setGravity(Gravity.CENTER);
         stateText.setTextColor(MINT);
         stateText.setTextSize(13);
-        stateText.setTypeface(Typeface.DEFAULT_BOLD);
+        stateText.setTypeface(
+                Typeface.create(
+                        Typeface.MONOSPACE,
+                        Typeface.BOLD
+                )
+        );
         stateText.setLetterSpacing(.20f);
         root.addView(stateText);
 
@@ -237,6 +250,7 @@ public class MainActivity extends Activity {
         wakeDebugText.setGravity(Gravity.CENTER);
         wakeDebugText.setTextColor(MUTED);
         wakeDebugText.setTextSize(11);
+        wakeDebugText.setTypeface(Typeface.MONOSPACE);
         wakeDebugText.setPadding(
                 0,
                 dp(6),
@@ -256,13 +270,13 @@ public class MainActivity extends Activity {
                 roundRect(
                         PANEL,
                         22,
-                        Color.rgb(31, 43, 43)
+                        BORDER
                 );
 
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.8.3 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.8.4 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -290,8 +304,30 @@ public class MainActivity extends Activity {
                         1f
                 );
         transcriptLp.topMargin = dp(20);
-        transcriptLp.bottomMargin = dp(16);
+        transcriptLp.bottomMargin = dp(8);
         root.addView(transcript, transcriptLp);
+
+        replayButton = button(
+                "▶  OPNIEUW",
+                PANEL,
+                MINT
+        );
+        replayButton.setTextSize(12);
+        replayButton.setTypeface(Typeface.MONOSPACE);
+        replayButton.setEnabled(false);
+        replayButton.setAlpha(.38f);
+        replayButton.setOnClickListener(
+                v -> replayLastAssistantReply()
+        );
+
+        LinearLayout.LayoutParams replayLp =
+                new LinearLayout.LayoutParams(
+                        dp(145),
+                        dp(40)
+                );
+        replayLp.gravity = Gravity.END;
+        replayLp.bottomMargin = dp(10);
+        root.addView(replayButton, replayLp);
 
         LinearLayout composer = new LinearLayout(this);
         composer.setOrientation(
@@ -301,7 +337,7 @@ public class MainActivity extends Activity {
                 Gravity.CENTER_VERTICAL
         );
 
-        micButton = button("🎙", PANEL, TEXT);
+        micButton = button("🎙", PANEL, MINT);
         micButton.setOnClickListener(
                 v -> startListening()
         );
@@ -330,7 +366,7 @@ public class MainActivity extends Activity {
                 roundRect(
                         PANEL,
                         18,
-                        Color.rgb(31, 43, 43)
+                        BORDER
                 )
         );
 
@@ -359,6 +395,51 @@ public class MainActivity extends Activity {
 
         root.addView(composer);
         setContentView(root);
+    }
+
+    private void setLastAssistantReply(
+            String text
+    ) {
+        lastAssistantReply =
+                text == null
+                        ? ""
+                        : text.trim();
+
+        if (replayButton != null) {
+            boolean available =
+                    !lastAssistantReply.isEmpty();
+
+            replayButton.setEnabled(available);
+            replayButton.setAlpha(
+                    available ? 1f : .38f
+            );
+        }
+    }
+
+    private void replayLastAssistantReply() {
+        if (lastAssistantReply.isEmpty()) {
+            Toast.makeText(
+                    this,
+                    "Nog geen MAATJE-antwoord om af te spelen.",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+
+        if (chatBusy) {
+            Toast.makeText(
+                    this,
+                    "Wacht even tot het huidige antwoord klaar is.",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+
+        pauseConversationTimer();
+        stopRecognitionSession();
+        stopPlayer();
+        stateText.setText("REPLAY");
+        speak(lastAssistantReply, true);
     }
 
     private void sendCurrentInput() {
@@ -395,7 +476,7 @@ public class MainActivity extends Activity {
         if (personalityCommand.handled) {
             append("\n\nJIJ\n" + q);
             append("\n\nMAATJE\n" + personalityCommand.message);
-            lastAssistantReply = personalityCommand.message;
+            setLastAssistantReply(personalityCommand.message);
             speak(personalityCommand.message);
             return;
         }
@@ -475,7 +556,7 @@ public class MainActivity extends Activity {
                             "\n\nMAATJE\n"
                                     + reply.text
                     );
-                    lastAssistantReply = reply.text;
+                    setLastAssistantReply(reply.text);
                     setBusy(false, "READY");
                     speak(reply.text);
                 });
@@ -1075,7 +1156,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.8.3 – Instellingen"
+                        "MAATJE v0.8.4 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -1189,7 +1270,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.3 – Geheugen"
+                                "MAATJE v0.8.4 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1279,7 +1360,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.3 – API"
+                                "MAATJE v0.8.4 – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1691,7 +1772,15 @@ public class MainActivity extends Activity {
     }
 
     private void speak(String text) {
-        if (!VoiceSettings.autoSpeak(this)) {
+        speak(text, false);
+    }
+
+    private void speak(
+            String text,
+            boolean forcePlayback
+    ) {
+        if (!forcePlayback
+                && !VoiceSettings.autoSpeak(this)) {
             resumeAfterAssistant(350);
             return;
         }
@@ -1984,7 +2073,13 @@ public class MainActivity extends Activity {
         b.setGravity(Gravity.CENTER);
         b.setPadding(0, 0, 0, 0);
         b.setBackground(
-                roundRect(bg, 18, bg)
+                roundRect(
+                        bg,
+                        18,
+                        bg == PANEL
+                                ? BORDER
+                                : bg
+                )
         );
         return b;
     }

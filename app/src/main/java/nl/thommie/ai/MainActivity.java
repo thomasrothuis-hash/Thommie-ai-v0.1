@@ -47,6 +47,7 @@ public class MainActivity extends Activity {
             Executors.newSingleThreadExecutor();
 
     private TextView stateText;
+    private TextView wakeDebugText;
     private TextView transcript;
     private EditText input;
     private Button micButton;
@@ -107,11 +108,24 @@ public class MainActivity extends Activity {
 
                                 stateText.setText("YES?");
 
+                                if (wakeDebugText != null) {
+                                    wakeDebugText.setText(
+                                            "HEARD • WAKE WORD"
+                                    );
+                                }
+
                                 mainHandler.postDelayed(
                                         MainActivity.this
                                                 ::startCommandListeningInternal,
                                         350
                                 );
+                            }
+
+                            @Override
+                            public void onHeard(
+                                    String text
+                            ) {
+                                updateWakeDebug(text);
                             }
 
                             @Override
@@ -177,7 +191,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.7  •  PERSONAL AI TERMINAL"
+                "v0.7.1  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -207,6 +221,25 @@ public class MainActivity extends Activity {
         stateText.setLetterSpacing(.20f);
         root.addView(stateText);
 
+        wakeDebugText = new TextView(this);
+        wakeDebugText.setGravity(Gravity.CENTER);
+        wakeDebugText.setTextColor(MUTED);
+        wakeDebugText.setTextSize(11);
+        wakeDebugText.setPadding(
+                0,
+                dp(6),
+                0,
+                0
+        );
+
+        wakeDebugText.setVisibility(
+                WakeWordSettings.debugEnabled(this)
+                        ? View.VISIBLE
+                        : View.GONE
+        );
+
+        root.addView(wakeDebugText);
+
         GradientDrawable panelBg =
                 roundRect(
                         PANEL,
@@ -217,7 +250,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.7 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.7.1 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -946,7 +979,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.7 – Instellingen"
+                        "MAATJE v0.7.1 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -968,6 +1001,9 @@ public class MainActivity extends Activity {
                                         enabled -> {
                                             wakeWordEnabled = enabled;
 
+                                            updateWakeDebugVisibility();
+                                            stopRecognitionSession();
+
                                             if (enabled) {
                                                 if (checkSelfPermission(
                                                         Manifest.permission.RECORD_AUDIO
@@ -981,10 +1017,9 @@ public class MainActivity extends Activity {
                                                             REQ_AUDIO
                                                     );
                                                 } else {
-                                                    scheduleWakeListening(250);
+                                                    scheduleWakeListening(350);
                                                 }
                                             } else {
-                                                stopRecognitionSession();
                                                 stateText.setText("READY");
                                             }
                                         }
@@ -1048,7 +1083,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.7 – Geheugen"
+                                "MAATJE v0.7.1 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1138,7 +1173,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.7 – API"
+                                "MAATJE v0.7.1 – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1215,6 +1250,44 @@ public class MainActivity extends Activity {
         });
 
         dialog.show();
+    }
+
+    private void updateWakeDebug(
+            String text
+    ) {
+        if (wakeDebugText == null) return;
+
+        if (!WakeWordSettings.debugEnabled(this)) {
+            wakeDebugText.setVisibility(
+                    View.GONE
+            );
+            return;
+        }
+
+        wakeDebugText.setVisibility(
+                View.VISIBLE
+        );
+
+        wakeDebugText.setText(
+                "HEARD • " + text
+        );
+    }
+
+    private void updateWakeDebugVisibility() {
+        if (wakeDebugText == null) return;
+
+        boolean visible =
+                WakeWordSettings.debugEnabled(this);
+
+        wakeDebugText.setVisibility(
+                visible
+                        ? View.VISIBLE
+                        : View.GONE
+        );
+
+        if (!visible) {
+            wakeDebugText.setText("");
+        }
     }
 
     private void setBusy(

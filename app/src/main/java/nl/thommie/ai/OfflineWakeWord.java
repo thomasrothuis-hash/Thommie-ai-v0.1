@@ -16,6 +16,7 @@ final class OfflineWakeWord implements RecognitionListener {
     interface Callback {
         void onReady();
         void onDetected();
+        void onHeard(String text);
         void onError(String message);
     }
 
@@ -29,6 +30,7 @@ final class OfflineWakeWord implements RecognitionListener {
     private boolean ready = false;
     private boolean running = false;
     private boolean detected = false;
+    private String lastHeard = "";
 
     OfflineWakeWord(
             Activity activity,
@@ -56,6 +58,7 @@ final class OfflineWakeWord implements RecognitionListener {
                 exception -> {
                     preparing = false;
                     ready = false;
+
                     callback.onError(
                             "Offline wake-model laden mislukt: "
                                     + exception.getMessage()
@@ -69,19 +72,25 @@ final class OfflineWakeWord implements RecognitionListener {
     }
 
     synchronized void start() {
-        if (!ready
-                || running
-                || model == null) {
+        if (!ready || running || model == null) {
             return;
         }
 
         detected = false;
+        lastHeard = "";
 
         try {
+            int sensitivity =
+                    WakeWordSettings.sensitivity(activity);
+
+            String grammar =
+                    grammarForSensitivity(sensitivity);
+
             Recognizer recognizer =
                     new Recognizer(
                             model,
-                            16000.0f
+                            16000.0f,
+                            grammar
                     );
 
             speechService =
@@ -125,30 +134,22 @@ final class OfflineWakeWord implements RecognitionListener {
     }
 
     @Override
-    public void onPartialResult(
-            String hypothesis
-    ) {
+    public void onPartialResult(String hypothesis) {
         inspect(hypothesis);
     }
 
     @Override
-    public void onResult(
-            String hypothesis
-    ) {
+    public void onResult(String hypothesis) {
         inspect(hypothesis);
     }
 
     @Override
-    public void onFinalResult(
-            String hypothesis
-    ) {
+    public void onFinalResult(String hypothesis) {
         inspect(hypothesis);
     }
 
     @Override
-    public void onError(
-            Exception exception
-    ) {
+    public void onError(Exception exception) {
         running = false;
 
         callback.onError(
@@ -162,9 +163,7 @@ final class OfflineWakeWord implements RecognitionListener {
         running = false;
     }
 
-    private void inspect(
-            String hypothesis
-    ) {
+    private void inspect(String hypothesis) {
         if (detected
                 || hypothesis == null
                 || hypothesis.isEmpty()) {
@@ -175,19 +174,28 @@ final class OfflineWakeWord implements RecognitionListener {
 
         if (text.isEmpty()) return;
 
-        String normalized =
-                text.toLowerCase(Locale.ROOT)
-                        .replaceAll(
-                                "[^\\p{L}\\p{N}\\s]",
-                                " "
-                        )
-                        .replaceAll(
-                                "\\s+",
-                                " "
-                        )
-                        .trim();
+        String normalized = normalize(text);
 
-        if (containsWakePhrase(normalized)) {
+        if (normalized.isEmpty()
+                || "[unk]".equals(normalized)) {
+            return;
+        }
+
+        if (!normalized.equals(lastHeard)) {
+            lastHeard = normalized;
+
+            activity.runOnUiThread(
+                    () -> callback.onHeard(normalized)
+            );
+        }
+
+        int sensitivity =
+                WakeWordSettings.sensitivity(activity);
+
+        if (containsWakePhrase(
+                normalized,
+                sensitivity
+        )) {
             detected = true;
             stop();
 
@@ -197,12 +205,9 @@ final class OfflineWakeWord implements RecognitionListener {
         }
     }
 
-    private String extractText(
-            String json
-    ) {
+    private String extractText(String json) {
         try {
-            JSONObject root =
-                    new JSONObject(json);
+            JSONObject root = new JSONObject(json);
 
             String partial =
                     root.optString(
@@ -224,14 +229,115 @@ final class OfflineWakeWord implements RecognitionListener {
         }
     }
 
+    private String normalize(String value) {
+        return value
+                .toLowerCase(Locale.ROOT)
+                .replace('é', 'e')
+                .replace('è', 'e')
+                .replaceAll(
+                        "[^\\p{L}\\p{N}\\s]",
+                        " "
+                )
+                .replaceAll(
+                        "\\s+",
+                        " "
+                )
+                .trim();
+    }
+
     private boolean containsWakePhrase(
-            String value
+            String value,
+            int sensitivity
     ) {
-        return value.contains("hey maatje")
-                || value.contains("hee maatje")
-                || value.contains("hé maatje")
-                || value.contains("hey maartje")
-                || value.contains("hee maartje")
-                || value.contains("hé maartje");
+        if (value.equals("hey maatje")
+                || value.equals("hee maatje")
+                || value.equals("he maatje")
+                || value.equals("hey maartje")
+                || value.equals("hee maartje")
+                || value.equals("he maartje")) {
+            return true;
+        }
+
+        if (sensitivity >= 45) {
+            if (value.equals("hoi maatje")
+                    || value.equals("hoi maartje")
+                    || value.equals("hey maat")
+                    || value.equals("hee maat")
+                    || value.equals("he maat")) {
+                return true;
+            }
+        }
+
+        if (sensitivity >= 70) {
+            if (value.contains("hey maatje")
+                    || value.contains("hee maatje")
+                    || value.contains("he maatje")
+                    || value.contains("hey maartje")
+                    || value.contains("hee maartje")
+                    || value.contains("he maartje")
+                    || value.contains("hoi maatje")
+                    || value.contains("hoi maartje")) {
+                return true;
+            }
+        }
+
+        if (sensitivity >= 88) {
+            return value.equals("maatje")
+                    || value.equals("maartje")
+                    || value.equals("maat");
+        }
+
+        return false;
+    }
+
+    private String grammarForSensitivity(
+            int sensitivity
+    ) {
+        if (sensitivity >= 88) {
+            return "["
+                    + "\"hey maatje\","
+                    + "\"hee maatje\","
+                    + "\"he maatje\","
+                    + "\"hey maartje\","
+                    + "\"hee maartje\","
+                    + "\"he maartje\","
+                    + "\"hoi maatje\","
+                    + "\"hoi maartje\","
+                    + "\"hey maat\","
+                    + "\"hee maat\","
+                    + "\"he maat\","
+                    + "\"maatje\","
+                    + "\"maartje\","
+                    + "\"maat\","
+                    + "\"[unk]\""
+                    + "]";
+        }
+
+        if (sensitivity >= 45) {
+            return "["
+                    + "\"hey maatje\","
+                    + "\"hee maatje\","
+                    + "\"he maatje\","
+                    + "\"hey maartje\","
+                    + "\"hee maartje\","
+                    + "\"he maartje\","
+                    + "\"hoi maatje\","
+                    + "\"hoi maartje\","
+                    + "\"hey maat\","
+                    + "\"hee maat\","
+                    + "\"he maat\","
+                    + "\"[unk]\""
+                    + "]";
+        }
+
+        return "["
+                + "\"hey maatje\","
+                + "\"hee maatje\","
+                + "\"he maatje\","
+                + "\"hey maartje\","
+                + "\"hee maartje\","
+                + "\"he maartje\","
+                + "\"[unk]\""
+                + "]";
     }
 }

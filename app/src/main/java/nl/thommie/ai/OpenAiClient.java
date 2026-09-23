@@ -32,7 +32,7 @@ final class OpenAiClient {
         JSONObject body = new JSONObject();
         JSONObject metadata = new JSONObject();
         metadata.put("app", "MAATJE");
-        metadata.put("version", "0.5");
+        metadata.put("version", "0.8.2");
         body.put("metadata", metadata);
 
         writeJson(conn, body);
@@ -88,7 +88,12 @@ final class OpenAiClient {
                 + "Geen overdreven klantenservice-toon, geen onnodige emoji's en geen lange beleefdheidsintroducties. "
                 + "Gebruik korte natuurlijke bevestigingen waar passend. "
                 + "Als de gebruiker technisch doorvraagt, mag je diep gaan. "
-                + "Je hoeft niet overdreven netjes te praten; normale spreektaal en passend gevloek zijn toegestaan.";
+                + "Je hoeft niet overdreven netjes te praten; normale spreektaal en passend gevloek zijn toegestaan. "
+                + "BELANGRIJK: je kunt lokale appinstellingen niet zelf wijzigen. "
+                + "Zeg nooit dat je humor, sarcasme, droogheid, enthousiasme, mood of scheldniveau hebt aangepast "
+                + "tenzij de Android-app het commando lokaal heeft afgehandeld voordat deze request werd verstuurd. "
+                + "Als een wijzigingsverzoek toch bij jou terechtkomt, zeg kort dat het lokale commando niet herkend is "
+                + "in plaats van te doen alsof de instelling gewijzigd is.";
 
         if (personalityPrompt != null
                 && !personalityPrompt.trim().isEmpty()) {

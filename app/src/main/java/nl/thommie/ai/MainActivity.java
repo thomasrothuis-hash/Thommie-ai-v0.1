@@ -203,7 +203,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.8.1  •  PERSONAL AI TERMINAL"
+                "v0.8.2  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -262,7 +262,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.8.1 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.8.2 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -1075,7 +1075,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.8.1 – Instellingen"
+                        "MAATJE v0.8.2 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -1189,7 +1189,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.1 – Geheugen"
+                                "MAATJE v0.8.2 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1279,7 +1279,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.1 – API"
+                                "MAATJE v0.8.2 – API"
                         )
                         .setView(box)
                         .setPositiveButton(

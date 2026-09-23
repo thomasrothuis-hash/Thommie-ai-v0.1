@@ -105,14 +105,16 @@ final class PersonalitySettings {
         sb.append("- Enthousiasme: ").append(enthusiasm).append("/100\n");
         sb.append("- Natuurlijk vloeken/schelden: ").append(profanity).append("/100\n\n");
 
-        sb.append("Pas je stijl proportioneel aan deze waarden aan. ");
-        sb.append("Humor moet natuurlijk uit het gesprek ontstaan en niet geforceerd worden. ");
-        sb.append("Droge humor betekent dat je de grap niet uitlegt en er niet zelf overdreven om lacht. ");
-        sb.append("Sarcasme mag speels en scherp zijn als de context dat toelaat. ");
-        sb.append("Je mag gewone Nederlandse krachttermen en gevloek gebruiken wanneer dat natuurlijk past, ");
-        sb.append("bijvoorbeeld bij frustratie, techniek die onnodig kut ontworpen is, of speelse gesprekken. ");
-        sb.append("Scheld niet gratuit, niet in elke zin en gebruik geen haatdragende slurs. ");
-        sb.append("Bij serieuze, gevoelige of feitelijke onderwerpen wordt de toon vanzelf rustiger. ");
+        sb.append("Deze percentages moeten MERKBAAR verschil maken in gedrag. ");
+        sb.append("Volg de onderstaande intensiteitsregels als actuele runtime-instellingen. ");
+        sb.append("Forceer geen grap of scheldwoord als het onderwerp dat duidelijk niet toelaat. ");
+        sb.append("Bij serieuze, gevoelige of feitelijke onderwerpen mag de toon vanzelf rustiger worden.\n");
+
+        appendHumorRule(sb, humor);
+        appendSarcasmRule(sb, sarcasm);
+        appendDryRule(sb, dry);
+        appendEnthusiasmRule(sb, enthusiasm);
+        appendProfanityRule(sb, profanity);
 
         if ("CHILL".equals(mood)) {
             sb.append("De huidige mood is CHILL: praat losser, warmer en iets speelser. ");
@@ -138,7 +140,9 @@ final class PersonalitySettings {
     static String voiceStyle(Context c) {
         String mood = mood(c);
         int humor = humor(c);
+        int sarcasm = sarcasm(c);
         int dry = dry(c);
+        int enthusiasm = enthusiasm(c);
 
         StringBuilder sb = new StringBuilder();
         sb.append("Reflect the current MAATJE personality in the delivery. ");
@@ -151,15 +155,116 @@ final class PersonalitySettings {
             sb.append("Sound composed, natural and quietly confident. ");
         }
 
-        if (humor >= 65) {
-            sb.append("Allow a subtle playful undertone when a joke lands. ");
+        if (humor >= 85) {
+            sb.append("Sound noticeably playful and quick-witted when appropriate. ");
+        } else if (humor >= 60) {
+            sb.append("Allow a natural playful undertone when a joke lands. ");
+        } else if (humor <= 20) {
+            sb.append("Keep delivery mostly straight and non-playful. ");
         }
 
-        if (dry >= 65) {
-            sb.append("Use dry deadpan delivery; never over-sell a joke or laugh at your own line. ");
+        if (sarcasm >= 75) {
+            sb.append("Allow a subtle sly or teasing edge when context supports sarcasm. ");
+        }
+
+        if (dry >= 70) {
+            sb.append("Use strong dry deadpan delivery; never over-sell a joke or laugh at your own line. ");
+        }
+
+        if (enthusiasm >= 80) {
+            sb.append("Sound energetic and animated. ");
+        } else if (enthusiasm <= 20) {
+            sb.append("Keep delivery restrained and calm. ");
         }
 
         return sb.toString();
+    }
+
+    private static void appendHumorRule(
+            StringBuilder sb,
+            int value
+    ) {
+        sb.append("- HUMOR-regel: ");
+        if (value <= 15) {
+            sb.append("vrijwel geen grappen; antwoord hoofdzakelijk rechttoe-rechtaan. ");
+        } else if (value <= 35) {
+            sb.append("weinig humor; alleen een incidentele natuurlijke grap. ");
+        } else if (value <= 60) {
+            sb.append("gematigde natuurlijke humor; af en toe een gevatte opmerking. ");
+        } else if (value <= 80) {
+            sb.append("duidelijk speelser; regelmatig gevat of grappig waar passend. ");
+        } else {
+            sb.append("zeer humoristisch en gevat; zoek vaak naar een natuurlijke grappige invalshoek, zonder elk antwoord in een grap te veranderen. ");
+        }
+        sb.append("\n");
+    }
+
+    private static void appendSarcasmRule(
+            StringBuilder sb,
+            int value
+    ) {
+        sb.append("- SARCASME-regel: ");
+        if (value <= 15) {
+            sb.append("vermijd sarcasme vrijwel volledig. ");
+        } else if (value <= 40) {
+            sb.append("licht sarcasme, alleen als het vanzelf past. ");
+        } else if (value <= 70) {
+            sb.append("regelmatig speels sarcasme en plagerigheid. ");
+        } else {
+            sb.append("duidelijk scherp en sarcastisch wanneer de context dat toelaat, zonder vijandig te worden. ");
+        }
+        sb.append("\n");
+    }
+
+    private static void appendDryRule(
+            StringBuilder sb,
+            int value
+    ) {
+        sb.append("- DROOGHEID-regel: ");
+        if (value <= 20) {
+            sb.append("weinig deadpan; maak humor duidelijker en warmer. ");
+        } else if (value <= 60) {
+            sb.append("gematigd droog; subtiele deadpan is prima. ");
+        } else {
+            sb.append("sterke droge/deadpan stijl; leg grappen niet uit en lach niet om je eigen grap. ");
+        }
+        sb.append("\n");
+    }
+
+    private static void appendEnthusiasmRule(
+            StringBuilder sb,
+            int value
+    ) {
+        sb.append("- ENTHOUSIASME-regel: ");
+        if (value <= 20) {
+            sb.append("rustig, beheerst en weinig uitbundig. ");
+        } else if (value <= 60) {
+            sb.append("normaal energieniveau. ");
+        } else if (value <= 80) {
+            sb.append("duidelijk enthousiast en levendig. ");
+        } else {
+            sb.append("zeer enthousiast en energiek, zonder irritant overdreven te worden. ");
+        }
+        sb.append("\n");
+    }
+
+    private static void appendProfanityRule(
+            StringBuilder sb,
+            int value
+    ) {
+        sb.append("- SCHELDEN-regel: ");
+        if (value == 0) {
+            sb.append("gebruik geen krachttermen of gevloek. ");
+        } else if (value <= 25) {
+            sb.append("zeer sporadisch een milde krachtterm als het natuurlijk past. ");
+        } else if (value <= 55) {
+            sb.append("af en toe gewone Nederlandse krachttermen bij frustratie of humor. ");
+        } else if (value <= 80) {
+            sb.append("vrij los taalgebruik en regelmatig passend gevloek. ");
+        } else {
+            sb.append("zeer los en ongefilterd spreektaalgebruik met geregeld passende krachttermen, maar niet gratuit en geen haatdragende slurs. ");
+        }
+        sb.append("\n");
     }
 
     static CommandResult handleCommand(Context c, String input) {
@@ -251,31 +356,46 @@ final class PersonalitySettings {
 
         Integer numeric;
 
-        numeric = extractPercent(lower, "(?:zet\\s+)?(?:de\\s+)?humor(?:\\s+level)?\\s*(?:op|naar)?\\s*(\\d{1,3})");
+        numeric = extractPercent(
+                lower,
+                "(?:(?:zet|maak)\\s+)?(?:(?:je|jouw|de)\\s+)?humor(?:\\s+level)?\\s*(?:op|naar|=)?\\s*(\\d{1,3})\\s*%?"
+        );
         if (numeric != null) {
             setInt(c, KEY_HUMOR, numeric);
             return changed("Humor", numeric);
         }
 
-        numeric = extractPercent(lower, "(?:zet\\s+)?sarcasme\\s*(?:op|naar)?\\s*(\\d{1,3})");
+        numeric = extractPercent(
+                lower,
+                "(?:(?:zet|maak)\\s+)?(?:(?:je|jouw|de)\\s+)?sarcasme\\s*(?:op|naar|=)?\\s*(\\d{1,3})\\s*%?"
+        );
         if (numeric != null) {
             setInt(c, KEY_SARCASM, numeric);
             return changed("Sarcasme", numeric);
         }
 
-        numeric = extractPercent(lower, "(?:zet\\s+)?(?:droogheid|droge humor)\\s*(?:op|naar)?\\s*(\\d{1,3})");
+        numeric = extractPercent(
+                lower,
+                "(?:(?:zet|maak)\\s+)?(?:(?:je|jouw|de)\\s+)?(?:droogheid|droge humor|deadpan)\\s*(?:op|naar|=)?\\s*(\\d{1,3})\\s*%?"
+        );
         if (numeric != null) {
             setInt(c, KEY_DRY, numeric);
             return changed("Droogheid", numeric);
         }
 
-        numeric = extractPercent(lower, "(?:zet\\s+)?enthousiasme\\s*(?:op|naar)?\\s*(\\d{1,3})");
+        numeric = extractPercent(
+                lower,
+                "(?:(?:zet|maak)\\s+)?(?:(?:je|jouw|de)\\s+)?enthousiasme\\s*(?:op|naar|=)?\\s*(\\d{1,3})\\s*%?"
+        );
         if (numeric != null) {
             setInt(c, KEY_ENTHUSIASM, numeric);
             return changed("Enthousiasme", numeric);
         }
 
-        numeric = extractPercent(lower, "(?:zet\\s+)?(?:schelden|vloeken|gevloek)\\s*(?:op|naar)?\\s*(\\d{1,3})");
+        numeric = extractPercent(
+                lower,
+                "(?:(?:zet|maak)\\s+)?(?:(?:je|jouw|de)\\s+)?(?:schelden|vloeken|gevloek)\\s*(?:op|naar|=)?\\s*(\\d{1,3})\\s*%?"
+        );
         if (numeric != null) {
             setInt(c, KEY_PROFANITY, numeric);
             return changed("Schelden", numeric);
@@ -673,7 +793,7 @@ final class PersonalitySettings {
         box.addView(reset);
 
         AlertDialog dialog = new AlertDialog.Builder(activity)
-                .setTitle("MAATJE v0.8.1 – Persoonlijkheid")
+                .setTitle("MAATJE v0.8.2 – Persoonlijkheid")
                 .setView(scroll)
                 .setPositiveButton("Opslaan", null)
                 .setNegativeButton("Annuleren", null)

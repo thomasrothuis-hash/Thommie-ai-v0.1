@@ -227,7 +227,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.8.8  •  PERSONAL AI TERMINAL"
+                "v0.8.9  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -293,7 +293,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.8.8 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.8.9 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -734,10 +734,10 @@ public class MainActivity extends Activity {
 
                             if (list != null
                                     && !list.isEmpty()) {
-                                String value =
+                                String rawValue =
                                         list.get(0);
 
-                                if (isConversationEndCommand(value)) {
+                                if (isConversationEndCommand(rawValue)) {
                                     endConversationSession();
                                     stateText.setText(
                                             "STANDBY • HEY MAATJE"
@@ -747,6 +747,11 @@ public class MainActivity extends Activity {
                                 }
 
                                 pauseConversationTimer();
+
+                                String value =
+                                        formatRecognizedSpeech(
+                                                rawValue
+                                        );
 
                                 input.setText(value);
                                 input.setSelection(
@@ -808,7 +813,11 @@ public class MainActivity extends Activity {
                                     ignoreNextRecognitionError = false;
 
                                     if (!wakeCommand.isEmpty()) {
-                                        ask(wakeCommand);
+                                        ask(
+                                                formatRecognizedSpeech(
+                                                        wakeCommand
+                                                )
+                                        );
                                     } else {
                                         startCommandListeningInternal();
                                     }
@@ -999,6 +1008,16 @@ public class MainActivity extends Activity {
                 5
         );
 
+        if (Build.VERSION.SDK_INT
+                >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+: ask the active speech provider for its
+            // highest-quality punctuation/capitalization pass.
+            intent.putExtra(
+                    RecognizerIntent.EXTRA_ENABLE_FORMATTING,
+                    RecognizerIntent.FORMATTING_OPTIMIZE_QUALITY
+            );
+        }
+
         return intent;
     }
 
@@ -1020,7 +1039,11 @@ public class MainActivity extends Activity {
         stateText.setText("YES?");
 
         if (!command.isEmpty()) {
-            ask(command);
+            ask(
+                    formatRecognizedSpeech(
+                            command
+                    )
+            );
             return;
         }
 
@@ -1173,7 +1196,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.8.8 – Instellingen"
+                        "MAATJE v0.8.9 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -1287,7 +1310,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.8 – Geheugen"
+                                "MAATJE v0.8.9 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1377,7 +1400,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.8 – API"
+                                "MAATJE v0.8.9 – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1669,6 +1692,146 @@ public class MainActivity extends Activity {
         } else {
             scheduleWakeListening(300);
         }
+    }
+
+    private String formatRecognizedSpeech(
+            String value
+    ) {
+        if (value == null) {
+            return "";
+        }
+
+        String text =
+                value.trim()
+                        .replaceAll("\\s+", " ");
+
+        if (text.isEmpty()) {
+            return text;
+        }
+
+        // Spoken punctuation remains useful even on recognizers that
+        // ignore Android's automatic formatting request.
+        text = text
+                .replaceAll(
+                        "(?i)\\s+komma(?=\\s|$)",
+                        ","
+                )
+                .replaceAll(
+                        "(?i)\\s+punt(?=\\s|$)",
+                        "."
+                )
+                .replaceAll(
+                        "(?i)\\s+vraagteken(?=\\s|$)",
+                        "?"
+                )
+                .replaceAll(
+                        "(?i)\\s+uitroepteken(?=\\s|$)",
+                        "!"
+                )
+                .replaceAll("\\s+([,.?!])", "$1")
+                .replaceAll("([,.?!])(?=\\p{L})", "$1 ")
+                .replaceAll("\\s+", " ")
+                .trim();
+
+        // Capitalize the first actual letter.
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+
+            if (Character.isLetter(c)) {
+                text =
+                        text.substring(0, i)
+                                + Character.toUpperCase(c)
+                                + text.substring(i + 1);
+                break;
+            }
+        }
+
+        if (hasSentenceEnding(text)) {
+            return text;
+        }
+
+        String lower =
+                text.toLowerCase(
+                        java.util.Locale.ROOT
+                );
+
+        boolean looksLikeQuestion =
+                startsWithQuestionPhrase(lower);
+
+        return text
+                + (looksLikeQuestion
+                        ? "?"
+                        : ".");
+    }
+
+    private boolean hasSentenceEnding(
+            String value
+    ) {
+        if (value == null
+                || value.isEmpty()) {
+            return false;
+        }
+
+        char last =
+                value.charAt(
+                        value.length() - 1
+                );
+
+        return last == '.'
+                || last == '?'
+                || last == '!';
+    }
+
+    private boolean startsWithQuestionPhrase(
+            String value
+    ) {
+        String[] questionStarts = {
+                "wie ",
+                "wat ",
+                "waar ",
+                "wanneer ",
+                "waarom ",
+                "hoe ",
+                "welke ",
+                "welk ",
+                "hoeveel ",
+                "kan ",
+                "kun ",
+                "kunnen ",
+                "mag ",
+                "moet ",
+                "moeten ",
+                "is ",
+                "zijn ",
+                "ben ",
+                "heb ",
+                "heeft ",
+                "hebben ",
+                "weet ",
+                "weten ",
+                "wil ",
+                "willen ",
+                "zou ",
+                "zouden ",
+                "zal ",
+                "zullen ",
+                "wordt ",
+                "worden ",
+                "doe ",
+                "doet ",
+                "klopt ",
+                "bestaat ",
+                "krijg ",
+                "krijgen "
+        };
+
+        for (String start : questionStarts) {
+            if (value.startsWith(start)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private boolean isConversationEndCommand(

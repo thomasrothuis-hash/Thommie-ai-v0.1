@@ -1,4 +1,4 @@
-name: Build MAATJE v0.8.8 APK
+name: Build MAATJE v0.8.9 APK
 
 on:
   workflow_dispatch:
@@ -65,17 +65,17 @@ jobs:
           gradle --no-daemon assembleRelease --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/release/app-release.apk MAATJE_v0.8.8.apk
+        run: cp app/build/outputs/apk/release/app-release.apk MAATJE_v0.8.9.apk
 
       - name: Verify APK signature
         run: |
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify \
-            --print-certs MAATJE_v0.8.8.apk
+            --print-certs MAATJE_v0.8.9.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MAATJE_v0.8.8
-          path: MAATJE_v0.8.8.apk
+          name: MAATJE_v0.8.9
+          path: MAATJE_v0.8.9.apk
           if-no-files-found: error
           retention-days: 30

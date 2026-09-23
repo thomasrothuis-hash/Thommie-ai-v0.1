@@ -1,8 +1,13 @@
-# MAATJE v0.8.8
+# MAATJE v0.8.9
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
 
-## v0.8.8 features
+## v0.8.9 features
+
+- Requests Android 13+ high-quality speech formatting for punctuation and capitalization.
+- Adds zero-network local fallback formatting for recognized Dutch speech.
+- Supports spoken punctuation commands: komma, punt, vraagteken and uitroepteken.
+- Automatically adds a question mark to common Dutch question forms and a period otherwise.
 
 - Temporarily raises Android's voice-call stream to maximum while MAATJE speaks.
 - Restores the user's previous call volume immediately after TTS.
@@ -46,7 +51,7 @@ gradle assembleDebug
 Expected output:
 `app/build/outputs/apk/debug/app-debug.apk`
 
-## Planned v0.8.8
+## Planned v0.8.9
 - Local wake word ("Hey ChatGPT")
 - Auto-start on boot
 - Optional launcher/kiosk mode
@@ -56,4 +61,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_AI_v0.8.8.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_AI_v0.8.9.apk` as a workflow artifact.

@@ -1,18 +1,20 @@
 package nl.thommie.ai;
 
 import android.app.Activity;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
+import android.media.audiofx.AcousticEchoCanceler;
+import android.media.audiofx.NoiseSuppressor;
 
 import org.json.JSONObject;
 import org.vosk.Model;
 import org.vosk.Recognizer;
-import org.vosk.android.RecognitionListener;
-import org.vosk.android.SpeechService;
 import org.vosk.android.StorageService;
 
 import java.util.Locale;
 
-final class OfflineWakeWord
-        implements RecognitionListener {
+final class OfflineWakeWord {
 
     interface Callback {
         void onReady();
@@ -31,11 +33,19 @@ final class OfflineWakeWord
     private final Callback callback;
 
     private Model model;
-    private SpeechService speechService;
+    private static final int SAMPLE_RATE = 16000;
+
+    private AudioRecord audioRecord;
+    private AcousticEchoCanceler echoCanceler;
+    private NoiseSuppressor noiseSuppressor;
+    private Thread audioThread;
+
+    private volatile int captureGeneration = 0;
+    private volatile boolean echoCancellationActive = false;
 
     private boolean preparing = false;
     private boolean ready = false;
-    private boolean running = false;
+    private volatile boolean running = false;
     private boolean detected = false;
 
     private String lastHeard = "";
@@ -117,29 +127,159 @@ final class OfflineWakeWord
         lastHeard = "";
         mode = requestedMode;
 
+        final int generation =
+                ++captureGeneration;
+
+        Recognizer localRecognizer = null;
+        AudioRecord localRecord = null;
+        AcousticEchoCanceler localAec = null;
+        NoiseSuppressor localNoise = null;
+
         try {
-            Recognizer recognizer =
+            localRecognizer =
                     new Recognizer(
                             model,
-                            16000.0f,
+                            SAMPLE_RATE,
                             grammar
                     );
 
-            speechService =
-                    new SpeechService(
-                            recognizer,
-                            16000.0f
+            int minBuffer =
+                    AudioRecord.getMinBufferSize(
+                            SAMPLE_RATE,
+                            AudioFormat.CHANNEL_IN_MONO,
+                            AudioFormat.ENCODING_PCM_16BIT
                     );
 
-            running = true;
+            if (minBuffer <= 0) {
+                throw new IllegalStateException(
+                        "Geen geldige microfoonbuffer beschikbaar."
+                );
+            }
 
-            speechService.startListening(
-                    this
-            );
+            int bufferSize =
+                    Math.max(
+                            minBuffer * 2,
+                            4096
+                    );
+
+            localRecord =
+                    new AudioRecord(
+                            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                            SAMPLE_RATE,
+                            AudioFormat.CHANNEL_IN_MONO,
+                            AudioFormat.ENCODING_PCM_16BIT,
+                            bufferSize
+                    );
+
+            if (localRecord.getState()
+                    != AudioRecord.STATE_INITIALIZED) {
+                try {
+                    localRecord.release();
+                } catch (Exception ignored) {}
+
+                localRecord =
+                        new AudioRecord(
+                                MediaRecorder.AudioSource.MIC,
+                                SAMPLE_RATE,
+                                AudioFormat.CHANNEL_IN_MONO,
+                                AudioFormat.ENCODING_PCM_16BIT,
+                                bufferSize
+                        );
+            }
+
+            if (localRecord.getState()
+                    != AudioRecord.STATE_INITIALIZED) {
+                throw new IllegalStateException(
+                        "Microfoon kon niet initialiseren."
+                );
+            }
+
+            int sessionId =
+                    localRecord.getAudioSessionId();
+
+            if (AcousticEchoCanceler.isAvailable()) {
+                try {
+                    localAec =
+                            AcousticEchoCanceler.create(
+                                    sessionId
+                            );
+
+                    if (localAec != null) {
+                        localAec.setEnabled(true);
+                        echoCancellationActive =
+                                localAec.getEnabled();
+                    }
+                } catch (Exception ignored) {
+                    localAec = null;
+                    echoCancellationActive = false;
+                }
+            } else {
+                echoCancellationActive = false;
+            }
+
+            if (NoiseSuppressor.isAvailable()) {
+                try {
+                    localNoise =
+                            NoiseSuppressor.create(
+                                    sessionId
+                            );
+
+                    if (localNoise != null) {
+                        localNoise.setEnabled(true);
+                    }
+                } catch (Exception ignored) {
+                    localNoise = null;
+                }
+            }
+
+            localRecord.startRecording();
+
+            if (localRecord.getRecordingState()
+                    != AudioRecord.RECORDSTATE_RECORDING) {
+                throw new IllegalStateException(
+                        "Microfoonopname kon niet starten."
+                );
+            }
+
+            running = true;
+            audioRecord = localRecord;
+            echoCanceler = localAec;
+            noiseSuppressor = localNoise;
+
+            final Recognizer threadRecognizer =
+                    localRecognizer;
+            final AudioRecord threadRecord =
+                    localRecord;
+            final AcousticEchoCanceler threadAec =
+                    localAec;
+            final NoiseSuppressor threadNoise =
+                    localNoise;
+
+            audioThread =
+                    new Thread(
+                            () -> captureLoop(
+                                    generation,
+                                    threadRecognizer,
+                                    threadRecord,
+                                    threadAec,
+                                    threadNoise
+                            ),
+                            "MAATJE-Vosk-AEC"
+                    );
+
+            audioThread.start();
 
         } catch (Exception e) {
             running = false;
-            speechService = null;
+            ++captureGeneration;
+            echoCancellationActive = false;
+
+            releaseCaptureResources(
+                    localRecord,
+                    localAec,
+                    localNoise,
+                    localRecognizer
+            );
 
             callback.onError(
                     "Offline voice-control starten mislukt: "
@@ -148,62 +288,152 @@ final class OfflineWakeWord
         }
     }
 
+    private void captureLoop(
+            int generation,
+            Recognizer recognizer,
+            AudioRecord record,
+            AcousticEchoCanceler aec,
+            NoiseSuppressor noise
+    ) {
+        android.os.Process.setThreadPriority(
+                android.os.Process.THREAD_PRIORITY_AUDIO
+        );
+
+        byte[] buffer = new byte[4096];
+
+        try {
+            while (running
+                    && captureGeneration
+                    == generation) {
+                int count =
+                        record.read(
+                                buffer,
+                                0,
+                                buffer.length
+                        );
+
+                if (count > 0) {
+                    boolean complete =
+                            recognizer.acceptWaveForm(
+                                    buffer,
+                                    count
+                            );
+
+                    inspect(
+                            complete
+                                    ? recognizer.getResult()
+                                    : recognizer.getPartialResult()
+                    );
+                } else if (count
+                        == AudioRecord.ERROR_INVALID_OPERATION
+                        || count
+                        == AudioRecord.ERROR_BAD_VALUE) {
+                    throw new IllegalStateException(
+                            "AudioRecord leesfout: "
+                                    + count
+                    );
+                }
+            }
+        } catch (Exception e) {
+            if (running
+                    && captureGeneration
+                    == generation) {
+                activity.runOnUiThread(
+                        () -> callback.onError(
+                                "Offline voice-control fout: "
+                                        + e.getMessage()
+                        )
+                );
+            }
+        } finally {
+            releaseCaptureResources(
+                    record,
+                    aec,
+                    noise,
+                    recognizer
+            );
+
+            synchronized (this) {
+                if (captureGeneration
+                        == generation) {
+                    running = false;
+                    audioRecord = null;
+                    echoCanceler = null;
+                    noiseSuppressor = null;
+                    audioThread = null;
+                    echoCancellationActive = false;
+                }
+            }
+        }
+    }
+
+    private void releaseCaptureResources(
+            AudioRecord record,
+            AcousticEchoCanceler aec,
+            NoiseSuppressor noise,
+            Recognizer recognizer
+    ) {
+        if (record != null) {
+            try {
+                if (record.getRecordingState()
+                        == AudioRecord.RECORDSTATE_RECORDING) {
+                    record.stop();
+                }
+            } catch (Exception ignored) {}
+
+            try {
+                record.release();
+            } catch (Exception ignored) {}
+        }
+
+        if (aec != null) {
+            try {
+                aec.release();
+            } catch (Exception ignored) {}
+        }
+
+        if (noise != null) {
+            try {
+                noise.release();
+            } catch (Exception ignored) {}
+        }
+
+        if (recognizer != null) {
+            try {
+                recognizer.close();
+            } catch (Exception ignored) {}
+        }
+    }
+
     synchronized void stop() {
         running = false;
+        ++captureGeneration;
+        echoCancellationActive = false;
 
-        if (speechService != null) {
+        AudioRecord record =
+                audioRecord;
+
+        audioRecord = null;
+        echoCanceler = null;
+        noiseSuppressor = null;
+        audioThread = null;
+
+        if (record != null) {
             try {
-                speechService.stop();
+                if (record.getRecordingState()
+                        == AudioRecord.RECORDSTATE_RECORDING) {
+                    record.stop();
+                }
             } catch (Exception ignored) {}
-
-            try {
-                speechService.shutdown();
-            } catch (Exception ignored) {}
-
-            speechService = null;
         }
+    }
+
+    boolean isEchoCancellationActive() {
+        return echoCancellationActive;
     }
 
     void destroy() {
         stop();
-    }
-
-    @Override
-    public void onPartialResult(
-            String hypothesis
-    ) {
-        inspect(hypothesis);
-    }
-
-    @Override
-    public void onResult(
-            String hypothesis
-    ) {
-        inspect(hypothesis);
-    }
-
-    @Override
-    public void onFinalResult(
-            String hypothesis
-    ) {
-        inspect(hypothesis);
-    }
-
-    @Override
-    public void onError(
-            Exception exception
-    ) {
-        running = false;
-
-        callback.onError(
-                "Offline voice-control fout: "
-                        + exception.getMessage()
-        );
-    }
-
-    @Override
-    public void onTimeout() {
-        running = false;
     }
 
     private void inspect(

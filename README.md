@@ -1,8 +1,12 @@
-# MAATJE v0.8.4
+# MAATJE v0.8.5
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
 
-## v0.8.4 features
+## v0.8.5 features
+
+- Acoustic echo cancellation (AEC) for local Vosk listening while MAATJE speaks.
+- VOICE_COMMUNICATION microphone capture with NoiseSuppressor and MIC fallback.
+- Keeps spoken "Maatje stop" interruption while reducing self-hearing.
 - Full-screen dark OLED-style interface
 - Text chat through OpenAI Responses API
 - Android speech recognition (Dutch) via microphone button
@@ -29,7 +33,7 @@ gradle assembleDebug
 Expected output:
 `app/build/outputs/apk/debug/app-debug.apk`
 
-## Planned v0.8.4
+## Planned v0.8.5
 - Local wake word ("Hey ChatGPT")
 - Auto-start on boot
 - Optional launcher/kiosk mode
@@ -39,4 +43,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_AI_v0.8.4.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_AI_v0.8.5.apk` as a workflow artifact.

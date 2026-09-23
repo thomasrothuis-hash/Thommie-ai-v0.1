@@ -10,16 +10,42 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 final class OpenAiClient {
+
+    static final class Source {
+        final String title;
+        final String url;
+
+        Source(
+                String title,
+                String url
+        ) {
+            this.title = title;
+            this.url = url;
+        }
+    }
 
     static final class Reply {
         final String responseId;
         final String text;
+        final boolean webUsed;
+        final List<Source> sources;
 
-        Reply(String responseId, String text) {
+        Reply(
+                String responseId,
+                String text,
+                boolean webUsed,
+                List<Source> sources
+        ) {
             this.responseId = responseId;
             this.text = text;
+            this.webUsed = webUsed;
+            this.sources = sources;
         }
     }
 
@@ -32,7 +58,7 @@ final class OpenAiClient {
         JSONObject body = new JSONObject();
         JSONObject metadata = new JSONObject();
         metadata.put("app", "MAATJE");
-        metadata.put("version", "0.8.2");
+        metadata.put("version", "0.9.0");
         body.put("metadata", metadata);
 
         writeJson(conn, body);
@@ -67,7 +93,8 @@ final class OpenAiClient {
             String conversationId,
             String input,
             String profileMemory,
-            String personalityPrompt
+            String personalityPrompt,
+            boolean webSearchEnabled
     ) throws Exception {
 
         URL url = new URL("https://api.openai.com/v1/responses");
@@ -79,6 +106,16 @@ final class OpenAiClient {
 
         if (conversationId != null && !conversationId.isEmpty()) {
             body.put("conversation", conversationId);
+        }
+
+        if (webSearchEnabled) {
+            JSONArray tools = new JSONArray();
+            JSONObject web = new JSONObject();
+            web.put("type", "web_search");
+            web.put("search_context_size", "medium");
+            tools.put(web);
+            body.put("tools", tools);
+            body.put("tool_choice", "auto");
         }
 
         String instructions =
@@ -94,6 +131,18 @@ final class OpenAiClient {
                 + "tenzij de Android-app het commando lokaal heeft afgehandeld voordat deze request werd verstuurd. "
                 + "Als een wijzigingsverzoek toch bij jou terechtkomt, zeg kort dat het lokale commando niet herkend is "
                 + "in plaats van te doen alsof de instelling gewijzigd is.";
+
+        if (webSearchEnabled) {
+            instructions +=
+                    " Je hebt web search beschikbaar. "
+                    + "Gebruik dit wanneer actuele, veranderlijke of externe informatie nodig of duidelijk nuttig is, "
+                    + "en wanneer de gebruiker expliciet vraagt iets op internet op te zoeken. "
+                    + "Gebruik web search niet onnodig voor stabiele algemene kennis.";
+        } else {
+            instructions +=
+                    " Web search staat lokaal uit. "
+                    + "Beweer niet dat je iets live op internet hebt opgezocht.";
+        }
 
         if (personalityPrompt != null
                 && !personalityPrompt.trim().isEmpty()) {
@@ -127,12 +176,23 @@ final class OpenAiClient {
         JSONObject root = new JSONObject(raw);
         String id = root.optString("id", "");
         String text = extractOutputText(root);
+        boolean webUsed = containsWebSearchCall(root);
+        List<Source> sources = extractWebSources(root);
+
+        if (!sources.isEmpty()) {
+            webUsed = true;
+        }
 
         if (text.isEmpty()) {
             text = "Ik kreeg een leeg antwoord terug van de API.";
         }
 
-        return new Reply(id, text);
+        return new Reply(
+                id,
+                text,
+                webUsed,
+                sources
+        );
     }
 
     private static HttpURLConnection open(URL url, String apiKey)
@@ -166,6 +226,103 @@ final class OpenAiClient {
                             .getBytes(StandardCharsets.UTF_8)
             );
         }
+    }
+
+    private static boolean containsWebSearchCall(
+            JSONObject root
+    ) {
+        JSONArray output = root.optJSONArray("output");
+        if (output == null) return false;
+
+        for (int i = 0; i < output.length(); i++) {
+            JSONObject item = output.optJSONObject(i);
+            if (item != null
+                    && "web_search_call".equals(item.optString("type"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<Source> extractWebSources(
+            JSONObject root
+    ) {
+        ArrayList<Source> sources = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        JSONArray output = root.optJSONArray("output");
+        if (output == null) return sources;
+
+        for (int i = 0; i < output.length(); i++) {
+            JSONObject item = output.optJSONObject(i);
+            if (item == null) continue;
+
+            JSONArray content = item.optJSONArray("content");
+            if (content != null) {
+                for (int j = 0; j < content.length(); j++) {
+                    JSONObject part = content.optJSONObject(j);
+                    if (part == null) continue;
+
+                    JSONArray annotations = part.optJSONArray("annotations");
+                    if (annotations == null) continue;
+
+                    for (int k = 0; k < annotations.length(); k++) {
+                        JSONObject annotation = annotations.optJSONObject(k);
+                        if (annotation == null
+                                || !"url_citation".equals(annotation.optString("type"))) {
+                            continue;
+                        }
+
+                        addSource(
+                                sources,
+                                seen,
+                                annotation.optString("title", ""),
+                                annotation.optString("url", "")
+                        );
+                    }
+                }
+            }
+
+            if ("web_search_call".equals(item.optString("type"))) {
+                JSONObject action = item.optJSONObject("action");
+                if (action != null) {
+                    JSONArray actionSources = action.optJSONArray("sources");
+                    if (actionSources != null) {
+                        for (int j = 0; j < actionSources.length(); j++) {
+                            JSONObject source = actionSources.optJSONObject(j);
+                            if (source != null) {
+                                addSource(
+                                        sources,
+                                        seen,
+                                        "",
+                                        source.optString("url", "")
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return sources;
+    }
+
+    private static void addSource(
+            List<Source> sources,
+            Set<String> seen,
+            String title,
+            String url
+    ) {
+        if (url == null) return;
+
+        String cleanUrl = url.trim();
+        if (cleanUrl.isEmpty() || seen.contains(cleanUrl)) return;
+
+        seen.add(cleanUrl);
+        sources.add(
+                new Source(
+                        title == null ? "" : title.trim(),
+                        cleanUrl
+                )
+        );
     }
 
     private static String extractOutputText(JSONObject root) {

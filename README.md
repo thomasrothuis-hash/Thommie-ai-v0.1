@@ -1,8 +1,15 @@
-# MAATJE v0.8.9
+# MAATJE v0.9.0
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
 
-## v0.8.9 features
+## v0.9.0 features
+
+- OpenAI Responses API web_search tool with automatic tool choice.
+- Internet setting: Automatic or Off.
+- Detects real web-search calls and shows up to five cited sources.
+- Source URLs are displayed but are not read aloud by TTS.
+- Voice commands for internet on/off/status.
+- Existing conversation memory, personality and local profile remain intact.
 
 - Requests Android 13+ high-quality speech formatting for punctuation and capitalization.
 - Adds zero-network local fallback formatting for recognized Dutch speech.
@@ -51,7 +58,7 @@ gradle assembleDebug
 Expected output:
 `app/build/outputs/apk/debug/app-debug.apk`
 
-## Planned v0.8.9
+## Planned v0.9.0
 - Local wake word ("Hey ChatGPT")
 - Auto-start on boot
 - Optional launcher/kiosk mode
@@ -61,4 +68,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_AI_v0.8.9.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_AI_v0.9.0.apk` as a workflow artifact.

@@ -227,7 +227,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.8.9  •  PERSONAL AI TERMINAL"
+                "v0.9.0  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -293,7 +293,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.8.9 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.9.0 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -487,6 +487,25 @@ public class MainActivity extends Activity {
             return;
         }
 
+        InternetSettings.CommandResult internetCommand =
+                InternetSettings.handleCommand(
+                        this,
+                        q
+                );
+
+        if (internetCommand.handled) {
+            append("\n\nJIJ\n" + q);
+            append(
+                    "\n\nMAATJE\n"
+                            + internetCommand.message
+            );
+            setLastAssistantReply(
+                    internetCommand.message
+            );
+            speak(internetCommand.message);
+            return;
+        }
+
         PersonalitySettings.CommandResult personalityCommand =
                 PersonalitySettings.handleCommand(this, q);
 
@@ -532,7 +551,15 @@ public class MainActivity extends Activity {
             );
         }
 
-        setBusy(true, "THINKING");
+        boolean webEnabled =
+                InternetSettings.enabled(this);
+
+        setBusy(
+                true,
+                webEnabled
+                        ? "THINKING • WEB AUTO"
+                        : "THINKING"
+        );
 
         chatExecutor.submit(() -> {
             try {
@@ -565,7 +592,8 @@ public class MainActivity extends Activity {
                                 conversationId,
                                 q,
                                 profileMemory,
-                                PersonalitySettings.prompt(MainActivity.this)
+                                PersonalitySettings.prompt(MainActivity.this),
+                                webEnabled
                         );
 
                 runOnUiThread(() -> {
@@ -573,8 +601,21 @@ public class MainActivity extends Activity {
                             "\n\nMAATJE\n"
                                     + reply.text
                     );
+                    if (reply.webUsed) {
+                        append(
+                                formatWebSources(
+                                        reply.sources
+                                )
+                        );
+                    }
+
                     setLastAssistantReply(reply.text);
-                    setBusy(false, "READY");
+                    setBusy(
+                            false,
+                            reply.webUsed
+                                    ? "READY • WEB"
+                                    : "READY"
+                    );
                     speak(reply.text);
                 });
 
@@ -589,6 +630,45 @@ public class MainActivity extends Activity {
                 });
             }
         });
+    }
+
+    private String formatWebSources(
+            java.util.List<OpenAiClient.Source> sources
+    ) {
+        if (sources == null
+                || sources.isEmpty()) {
+            return "\n\nWEB\nLive web search gebruikt.";
+        }
+
+        StringBuilder sb =
+                new StringBuilder(
+                        "\n\nBRONNEN"
+                );
+
+        int count =
+                Math.min(
+                        sources.size(),
+                        5
+                );
+
+        for (int i = 0; i < count; i++) {
+            OpenAiClient.Source source =
+                    sources.get(i);
+
+            sb.append("\n")
+                    .append(i + 1)
+                    .append(". ");
+
+            if (source.title != null
+                    && !source.title.isEmpty()) {
+                sb.append(source.title)
+                        .append("\n   ");
+            }
+
+            sb.append(source.url);
+        }
+
+        return sb.toString();
     }
 
     private void initSpeechRecognizer() {
@@ -1187,6 +1267,7 @@ public class MainActivity extends Activity {
     private void showSettingsMenu() {
         String[] options = {
                 "API-key",
+                "Internet",
                 "Stem & audio",
                 "Geheugen",
                 "Persoonlijkheid",
@@ -1196,7 +1277,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.8.9 – Instellingen"
+                        "MAATJE v0.9.0 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -1204,15 +1285,17 @@ public class MainActivity extends Activity {
                             if (which == 0) {
                                 showApiKeyDialog(false);
                             } else if (which == 1) {
+                                InternetSettings.show(this);
+                            } else if (which == 2) {
                                 VoiceSettings.show(
                                         this,
                                         this::testCloudVoice
                                 );
-                            } else if (which == 2) {
-                                showMemoryDialog();
                             } else if (which == 3) {
-                                PersonalitySettings.show(this);
+                                showMemoryDialog();
                             } else if (which == 4) {
+                                PersonalitySettings.show(this);
+                            } else if (which == 5) {
                                 ConversationSettings.show(
                                         this,
                                         enabled -> {
@@ -1310,7 +1393,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.9 – Geheugen"
+                                "MAATJE v0.9.0 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1400,7 +1483,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.9 – API"
+                                "MAATJE v0.9.0 – API"
                         )
                         .setView(box)
                         .setPositiveButton(

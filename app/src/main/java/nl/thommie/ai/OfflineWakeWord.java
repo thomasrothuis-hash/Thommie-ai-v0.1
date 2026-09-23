@@ -143,6 +143,9 @@ final class OfflineWakeWord {
                             grammar
                     );
 
+            // Needed for per-word confidence values in final Vosk results.
+            localRecognizer.setWords(true);
+
             int minBuffer =
                     AudioRecord.getMinBufferSize(
                             SAMPLE_RATE,
@@ -319,11 +322,20 @@ final class OfflineWakeWord {
                                     count
                             );
 
-                    inspect(
-                            complete
-                                    ? recognizer.getResult()
-                                    : recognizer.getPartialResult()
-                    );
+                    if (complete) {
+                        inspect(
+                                recognizer.getResult(),
+                                true
+                        );
+                    } else if (mode != Mode.STOP) {
+                        // During MAATJE speech we intentionally ignore
+                        // partial STOP hypotheses. Speaker leakage often
+                        // creates convincing partial false positives.
+                        inspect(
+                                recognizer.getPartialResult(),
+                                false
+                        );
+                    }
                 } else if (count
                         == AudioRecord.ERROR_INVALID_OPERATION
                         || count
@@ -437,7 +449,8 @@ final class OfflineWakeWord {
     }
 
     private void inspect(
-            String hypothesis
+            String hypothesis,
+            boolean finalResult
     ) {
         if (detected
                 || hypothesis == null
@@ -454,6 +467,7 @@ final class OfflineWakeWord {
                 normalize(text);
 
         if (normalized.isEmpty()
+                || "unk".equals(normalized)
                 || "[unk]".equals(normalized)) {
             return;
         }
@@ -469,7 +483,18 @@ final class OfflineWakeWord {
         }
 
         if (mode == Mode.STOP) {
-            if (containsStopPhrase(normalized)) {
+            if (!finalResult) {
+                return;
+            }
+
+            float confidence =
+                    stopPhraseConfidence(
+                            hypothesis,
+                            normalized
+                    );
+
+            if (containsStopPhrase(normalized)
+                    && confidence >= 0.86f) {
                 detected = true;
                 stop();
 
@@ -493,6 +518,75 @@ final class OfflineWakeWord {
             activity.runOnUiThread(
                     callback::onDetected
             );
+        }
+    }
+
+    private float stopPhraseConfidence(
+            String json,
+            String normalized
+    ) {
+        if (json == null
+                || !containsStopPhrase(normalized)) {
+            return 0f;
+        }
+
+        try {
+            JSONObject root =
+                    new JSONObject(json);
+
+            org.json.JSONArray words =
+                    root.optJSONArray("result");
+
+            if (words == null
+                    || words.length() < 2) {
+                return 0f;
+            }
+
+            float sum = 0f;
+            float minimum = 1f;
+            int count = 0;
+
+            for (int i = 0; i < words.length(); i++) {
+                JSONObject word =
+                        words.optJSONObject(i);
+
+                if (word == null
+                        || !word.has("conf")) {
+                    continue;
+                }
+
+                float conf =
+                        (float) word.optDouble(
+                                "conf",
+                                0.0
+                        );
+
+                sum += conf;
+                minimum = Math.min(
+                        minimum,
+                        conf
+                );
+                count++;
+            }
+
+            if (count < 2) {
+                return 0f;
+            }
+
+            float average =
+                    sum / count;
+
+            // Both words must be convincing. This prevents MAATJE's
+            // own speech being forced by the tiny grammar into
+            // "maatje stop".
+            if (minimum < 0.78f) {
+                return 0f;
+            }
+
+            return average;
+
+        } catch (Exception ignored) {
+            return 0f;
         }
     }
 

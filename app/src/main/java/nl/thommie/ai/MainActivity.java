@@ -8,6 +8,8 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.media.AudioAttributes;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.os.Handler;
@@ -56,7 +58,11 @@ public class MainActivity extends Activity {
     private Button replayButton;
     private SpeechRecognizer speechRecognizer;
     private MediaPlayer mediaPlayer;
+    private AudioManager audioManager;
     private OfflineWakeWord offlineWakeWord;
+    private boolean communicationAudioActive = false;
+    private int previousAudioMode = AudioManager.MODE_NORMAL;
+    private boolean previousSpeakerphoneOn = false;
     private String lastAssistantReply = "";
     private final Handler mainHandler =
             new Handler(Looper.getMainLooper());
@@ -92,6 +98,12 @@ public class MainActivity extends Activity {
 
         buildUi();
         initSpeechRecognizer();
+
+        audioManager =
+                (AudioManager) getSystemService(
+                        AUDIO_SERVICE
+                );
+
         wakeWordEnabled = WakeWordSettings.enabled(this);
 
         offlineWakeWord =
@@ -210,7 +222,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.8.5  •  PERSONAL AI TERMINAL"
+                "v0.8.6  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -276,7 +288,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.8.5 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.8.6 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -1156,7 +1168,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.8.5 – Instellingen"
+                        "MAATJE v0.8.6 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -1270,7 +1282,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.5 – Geheugen"
+                                "MAATJE v0.8.6 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1360,7 +1372,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.5 – API"
+                                "MAATJE v0.8.6 – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1918,7 +1930,19 @@ public class MainActivity extends Activity {
         stopPlayer();
 
         try {
+            beginCommunicationAudio();
+
             mediaPlayer = new MediaPlayer();
+            mediaPlayer.setAudioAttributes(
+                    new AudioAttributes.Builder()
+                            .setUsage(
+                                    AudioAttributes.USAGE_VOICE_COMMUNICATION
+                            )
+                            .setContentType(
+                                    AudioAttributes.CONTENT_TYPE_SPEECH
+                            )
+                            .build()
+            );
             mediaPlayer.setDataSource(
                     file.getAbsolutePath()
             );
@@ -1951,6 +1975,8 @@ public class MainActivity extends Activity {
                         }
 
                         assistantSpeaking = false;
+                        endCommunicationAudio();
+
                         normalListeningBlockedUntil =
                                 System.currentTimeMillis()
                                         + POST_TTS_COOLDOWN_MS;
@@ -1975,6 +2001,7 @@ public class MainActivity extends Activity {
                         }
 
                         assistantSpeaking = false;
+                        endCommunicationAudio();
 
                         file.delete();
                         recoverAfterAssistantFailure(550);
@@ -1986,6 +2013,7 @@ public class MainActivity extends Activity {
 
         } catch (Exception e) {
             assistantSpeaking = false;
+            endCommunicationAudio();
             file.delete();
 
             Toast.makeText(
@@ -2013,6 +2041,53 @@ public class MainActivity extends Activity {
         );
     }
 
+    @SuppressWarnings("deprecation")
+    private void beginCommunicationAudio() {
+        if (audioManager == null) {
+            return;
+        }
+
+        if (!communicationAudioActive) {
+            previousAudioMode =
+                    audioManager.getMode();
+            previousSpeakerphoneOn =
+                    audioManager.isSpeakerphoneOn();
+            communicationAudioActive = true;
+        }
+
+        try {
+            audioManager.setMode(
+                    AudioManager.MODE_IN_COMMUNICATION
+            );
+
+            // Keep MAATJE on the phone speaker while using the
+            // communication path that Android's AEC is designed for.
+            audioManager.setSpeakerphoneOn(true);
+        } catch (Exception ignored) {}
+    }
+
+    @SuppressWarnings("deprecation")
+    private void endCommunicationAudio() {
+        if (!communicationAudioActive
+                || audioManager == null) {
+            return;
+        }
+
+        try {
+            audioManager.setSpeakerphoneOn(
+                    previousSpeakerphoneOn
+            );
+        } catch (Exception ignored) {}
+
+        try {
+            audioManager.setMode(
+                    previousAudioMode
+            );
+        } catch (Exception ignored) {}
+
+        communicationAudioActive = false;
+    }
+
     private void stopPlayer() {
         assistantSpeaking = false;
 
@@ -2033,6 +2108,8 @@ public class MainActivity extends Activity {
 
             mediaPlayer = null;
         }
+
+        endCommunicationAudio();
     }
 
     @Override

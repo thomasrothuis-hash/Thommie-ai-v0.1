@@ -11,13 +11,20 @@ import org.vosk.android.StorageService;
 
 import java.util.Locale;
 
-final class OfflineWakeWord implements RecognitionListener {
+final class OfflineWakeWord
+        implements RecognitionListener {
 
     interface Callback {
         void onReady();
         void onDetected();
+        void onStopDetected();
         void onHeard(String text);
         void onError(String message);
+    }
+
+    private enum Mode {
+        WAKE,
+        STOP
     }
 
     private final Activity activity;
@@ -30,7 +37,9 @@ final class OfflineWakeWord implements RecognitionListener {
     private boolean ready = false;
     private boolean running = false;
     private boolean detected = false;
+
     private String lastHeard = "";
+    private Mode mode = Mode.WAKE;
 
     OfflineWakeWord(
             Activity activity,
@@ -72,20 +81,43 @@ final class OfflineWakeWord implements RecognitionListener {
     }
 
     synchronized void start() {
-        if (!ready || running || model == null) {
+        startInternal(
+                Mode.WAKE,
+                grammarForWake()
+        );
+    }
+
+    synchronized void startStopListening() {
+        startInternal(
+                Mode.STOP,
+                "["
+                        + "\"maatje stop\","
+                        + "\"maartje stop\","
+                        + "\"hey maatje stop\","
+                        + "\"hee maatje stop\","
+                        + "\"he maatje stop\","
+                        + "\"stop maatje\","
+                        + "\"stop maartje\","
+                        + "\"[unk]\""
+                        + "]"
+        );
+    }
+
+    private synchronized void startInternal(
+            Mode requestedMode,
+            String grammar
+    ) {
+        if (!ready || model == null) {
             return;
         }
 
+        stop();
+
         detected = false;
         lastHeard = "";
+        mode = requestedMode;
 
         try {
-            int sensitivity =
-                    WakeWordSettings.sensitivity(activity);
-
-            String grammar =
-                    grammarForSensitivity(sensitivity);
-
             Recognizer recognizer =
                     new Recognizer(
                             model,
@@ -100,14 +132,17 @@ final class OfflineWakeWord implements RecognitionListener {
                     );
 
             running = true;
-            speechService.startListening(this);
+
+            speechService.startListening(
+                    this
+            );
 
         } catch (Exception e) {
             running = false;
             speechService = null;
 
             callback.onError(
-                    "Offline wake-listener starten mislukt: "
+                    "Offline voice-control starten mislukt: "
                             + e.getMessage()
             );
         }
@@ -134,26 +169,34 @@ final class OfflineWakeWord implements RecognitionListener {
     }
 
     @Override
-    public void onPartialResult(String hypothesis) {
+    public void onPartialResult(
+            String hypothesis
+    ) {
         inspect(hypothesis);
     }
 
     @Override
-    public void onResult(String hypothesis) {
+    public void onResult(
+            String hypothesis
+    ) {
         inspect(hypothesis);
     }
 
     @Override
-    public void onFinalResult(String hypothesis) {
+    public void onFinalResult(
+            String hypothesis
+    ) {
         inspect(hypothesis);
     }
 
     @Override
-    public void onError(Exception exception) {
+    public void onError(
+            Exception exception
+    ) {
         running = false;
 
         callback.onError(
-                "Offline wake-listener fout: "
+                "Offline voice-control fout: "
                         + exception.getMessage()
         );
     }
@@ -163,18 +206,22 @@ final class OfflineWakeWord implements RecognitionListener {
         running = false;
     }
 
-    private void inspect(String hypothesis) {
+    private void inspect(
+            String hypothesis
+    ) {
         if (detected
                 || hypothesis == null
                 || hypothesis.isEmpty()) {
             return;
         }
 
-        String text = extractText(hypothesis);
+        String text =
+                extractText(hypothesis);
 
         if (text.isEmpty()) return;
 
-        String normalized = normalize(text);
+        String normalized =
+                normalize(text);
 
         if (normalized.isEmpty()
                 || "[unk]".equals(normalized)) {
@@ -185,16 +232,30 @@ final class OfflineWakeWord implements RecognitionListener {
             lastHeard = normalized;
 
             activity.runOnUiThread(
-                    () -> callback.onHeard(normalized)
+                    () -> callback.onHeard(
+                            normalized
+                    )
             );
         }
 
-        int sensitivity =
-                WakeWordSettings.sensitivity(activity);
+        if (mode == Mode.STOP) {
+            if (containsStopPhrase(normalized)) {
+                detected = true;
+                stop();
+
+                activity.runOnUiThread(
+                        callback::onStopDetected
+                );
+            }
+
+            return;
+        }
 
         if (containsWakePhrase(
                 normalized,
-                sensitivity
+                WakeWordSettings.sensitivity(
+                        activity
+                )
         )) {
             detected = true;
             stop();
@@ -205,9 +266,12 @@ final class OfflineWakeWord implements RecognitionListener {
         }
     }
 
-    private String extractText(String json) {
+    private String extractText(
+            String json
+    ) {
         try {
-            JSONObject root = new JSONObject(json);
+            JSONObject root =
+                    new JSONObject(json);
 
             String partial =
                     root.optString(
@@ -229,7 +293,9 @@ final class OfflineWakeWord implements RecognitionListener {
         }
     }
 
-    private String normalize(String value) {
+    private String normalize(
+            String value
+    ) {
         return value
                 .toLowerCase(Locale.ROOT)
                 .replace('é', 'e')
@@ -243,6 +309,20 @@ final class OfflineWakeWord implements RecognitionListener {
                         " "
                 )
                 .trim();
+    }
+
+    private boolean containsStopPhrase(
+            String value
+    ) {
+        return value.equals("maatje stop")
+                || value.equals("maartje stop")
+                || value.equals("hey maatje stop")
+                || value.equals("hee maatje stop")
+                || value.equals("he maatje stop")
+                || value.equals("stop maatje")
+                || value.equals("stop maartje")
+                || value.contains("maatje stop")
+                || value.contains("maartje stop");
     }
 
     private boolean containsWakePhrase(
@@ -290,9 +370,12 @@ final class OfflineWakeWord implements RecognitionListener {
         return false;
     }
 
-    private String grammarForSensitivity(
-            int sensitivity
-    ) {
+    private String grammarForWake() {
+        int sensitivity =
+                WakeWordSettings.sensitivity(
+                        activity
+                );
+
         if (sensitivity >= 88) {
             return "["
                     + "\"hey maatje\","

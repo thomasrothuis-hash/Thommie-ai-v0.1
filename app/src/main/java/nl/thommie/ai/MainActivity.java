@@ -9,8 +9,10 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioAttributes;
+import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -63,6 +65,7 @@ public class MainActivity extends Activity {
     private boolean communicationAudioActive = false;
     private int previousAudioMode = AudioManager.MODE_NORMAL;
     private boolean previousSpeakerphoneOn = false;
+    private AudioDeviceInfo previousCommunicationDevice = null;
     private String lastAssistantReply = "";
     private final Handler mainHandler =
             new Handler(Looper.getMainLooper());
@@ -222,7 +225,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.8.6  •  PERSONAL AI TERMINAL"
+                "v0.8.7  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -288,7 +291,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.8.6 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.8.7 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -1168,7 +1171,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.8.6 – Instellingen"
+                        "MAATJE v0.8.7 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -1282,7 +1285,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.6 – Geheugen"
+                                "MAATJE v0.8.7 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1372,7 +1375,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.6 – API"
+                                "MAATJE v0.8.7 – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1943,6 +1946,10 @@ public class MainActivity extends Activity {
                             )
                             .build()
             );
+            mediaPlayer.setVolume(
+                    1.0f,
+                    1.0f
+            );
             mediaPlayer.setDataSource(
                     file.getAbsolutePath()
             );
@@ -2052,6 +2059,13 @@ public class MainActivity extends Activity {
                     audioManager.getMode();
             previousSpeakerphoneOn =
                     audioManager.isSpeakerphoneOn();
+
+            if (Build.VERSION.SDK_INT
+                    >= Build.VERSION_CODES.S) {
+                previousCommunicationDevice =
+                        audioManager.getCommunicationDevice();
+            }
+
             communicationAudioActive = true;
         }
 
@@ -2060,9 +2074,30 @@ public class MainActivity extends Activity {
                     AudioManager.MODE_IN_COMMUNICATION
             );
 
-            // Keep MAATJE on the phone speaker while using the
-            // communication path that Android's AEC is designed for.
-            audioManager.setSpeakerphoneOn(true);
+            if (Build.VERSION.SDK_INT
+                    >= Build.VERSION_CODES.S) {
+                AudioDeviceInfo speaker = null;
+
+                for (AudioDeviceInfo device :
+                        audioManager
+                                .getAvailableCommunicationDevices()) {
+                    if (device.getType()
+                            == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                        speaker = device;
+                        break;
+                    }
+                }
+
+                if (speaker != null) {
+                    audioManager.setCommunicationDevice(
+                            speaker
+                    );
+                }
+            } else {
+                audioManager.setSpeakerphoneOn(
+                        true
+                );
+            }
         } catch (Exception ignored) {}
     }
 
@@ -2074,9 +2109,20 @@ public class MainActivity extends Activity {
         }
 
         try {
-            audioManager.setSpeakerphoneOn(
-                    previousSpeakerphoneOn
-            );
+            if (Build.VERSION.SDK_INT
+                    >= Build.VERSION_CODES.S) {
+                if (previousCommunicationDevice != null) {
+                    audioManager.setCommunicationDevice(
+                            previousCommunicationDevice
+                    );
+                } else {
+                    audioManager.clearCommunicationDevice();
+                }
+            } else {
+                audioManager.setSpeakerphoneOn(
+                        previousSpeakerphoneOn
+                );
+            }
         } catch (Exception ignored) {}
 
         try {
@@ -2085,6 +2131,7 @@ public class MainActivity extends Activity {
             );
         } catch (Exception ignored) {}
 
+        previousCommunicationDevice = null;
         communicationAudioActive = false;
     }
 

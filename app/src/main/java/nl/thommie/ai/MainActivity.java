@@ -66,6 +66,8 @@ public class MainActivity extends Activity {
     private int previousAudioMode = AudioManager.MODE_NORMAL;
     private boolean previousSpeakerphoneOn = false;
     private AudioDeviceInfo previousCommunicationDevice = null;
+    private int previousVoiceCallVolume = -1;
+    private boolean voiceCallVolumeBoosted = false;
     private String lastAssistantReply = "";
     private final Handler mainHandler =
             new Handler(Looper.getMainLooper());
@@ -225,7 +227,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.8.7  •  PERSONAL AI TERMINAL"
+                "v0.8.8  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -291,7 +293,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.8.7 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.8.8 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -1171,7 +1173,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.8.7 – Instellingen"
+                        "MAATJE v0.8.8 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -1285,7 +1287,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.7 – Geheugen"
+                                "MAATJE v0.8.8 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1375,7 +1377,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.7 – API"
+                                "MAATJE v0.8.8 – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -2066,6 +2068,32 @@ public class MainActivity extends Activity {
                         audioManager.getCommunicationDevice();
             }
 
+            try {
+                previousVoiceCallVolume =
+                        audioManager.getStreamVolume(
+                                AudioManager.STREAM_VOICE_CALL
+                        );
+
+                int maxVoiceVolume =
+                        audioManager.getStreamMaxVolume(
+                                AudioManager.STREAM_VOICE_CALL
+                        );
+
+                if (maxVoiceVolume > 0
+                        && previousVoiceCallVolume
+                        < maxVoiceVolume) {
+                    audioManager.setStreamVolume(
+                            AudioManager.STREAM_VOICE_CALL,
+                            maxVoiceVolume,
+                            0
+                    );
+                    voiceCallVolumeBoosted = true;
+                }
+            } catch (Exception ignored) {
+                previousVoiceCallVolume = -1;
+                voiceCallVolumeBoosted = false;
+            }
+
             communicationAudioActive = true;
         }
 
@@ -2131,6 +2159,19 @@ public class MainActivity extends Activity {
             );
         } catch (Exception ignored) {}
 
+        if (voiceCallVolumeBoosted
+                && previousVoiceCallVolume >= 0) {
+            try {
+                audioManager.setStreamVolume(
+                        AudioManager.STREAM_VOICE_CALL,
+                        previousVoiceCallVolume,
+                        0
+                );
+            } catch (Exception ignored) {}
+        }
+
+        previousVoiceCallVolume = -1;
+        voiceCallVolumeBoosted = false;
         previousCommunicationDevice = null;
         communicationAudioActive = false;
     }

@@ -1,8 +1,12 @@
-# MAATJE v0.8.7
+# MAATJE v0.8.8
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
 
-## v0.8.7 features
+## v0.8.8 features
+
+- Temporarily raises Android's voice-call stream to maximum while MAATJE speaks.
+- Restores the user's previous call volume immediately after TTS.
+- Keeps communication-mode AEC and explicit loudspeaker routing.
 
 - Keeps communication-mode AEC but explicitly routes TTS to the built-in loudspeaker on Android 12+.
 - Restores the previous communication audio device after speech.
@@ -42,7 +46,7 @@ gradle assembleDebug
 Expected output:
 `app/build/outputs/apk/debug/app-debug.apk`
 
-## Planned v0.8.7
+## Planned v0.8.8
 - Local wake word ("Hey ChatGPT")
 - Auto-start on boot
 - Optional launcher/kiosk mode
@@ -52,4 +56,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_AI_v0.8.7.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_AI_v0.8.8.apk` as a workflow artifact.

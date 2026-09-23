@@ -203,7 +203,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.8.2  •  PERSONAL AI TERMINAL"
+                "v0.8.3  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -262,7 +262,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.8.2 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.8.3 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -487,7 +487,7 @@ public class MainActivity extends Activity {
                                     + e.getMessage()
                     );
                     setBusy(false, "ERROR");
-                    resumeAfterAssistant(700);
+                    recoverAfterAssistantFailure(700);
                 });
             }
         });
@@ -1075,7 +1075,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.8.2 – Instellingen"
+                        "MAATJE v0.8.3 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -1189,7 +1189,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.2 – Geheugen"
+                                "MAATJE v0.8.3 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1279,7 +1279,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8.2 – API"
+                                "MAATJE v0.8.3 – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1730,6 +1730,18 @@ public class MainActivity extends Activity {
                                 speed
                         );
 
+                if (audio == null
+                        || !audio.exists()
+                        || audio.length() <= 0L) {
+                    if (audio != null) {
+                        audio.delete();
+                    }
+
+                    throw new Exception(
+                            "TTS leverde geen bruikbaar audiobestand."
+                    );
+                }
+
                 runOnUiThread(
                         () -> playAudio(audio)
                 );
@@ -1743,7 +1755,7 @@ public class MainActivity extends Activity {
                             Toast.LENGTH_LONG
                     ).show();
 
-                    scheduleWakeListening(700);
+                    recoverAfterAssistantFailure(700);
                 });
             }
         });
@@ -1859,12 +1871,9 @@ public class MainActivity extends Activity {
                         }
 
                         assistantSpeaking = false;
-                        normalListeningBlockedUntil =
-                                System.currentTimeMillis()
-                                        + 500L;
 
                         file.delete();
-                        resumeAfterAssistant(550);
+                        recoverAfterAssistantFailure(550);
                         return true;
                     }
             );
@@ -1881,7 +1890,23 @@ public class MainActivity extends Activity {
                             + e.getMessage(),
                     Toast.LENGTH_LONG
             ).show();
+
+            recoverAfterAssistantFailure(550);
         }
+    }
+
+    private void recoverAfterAssistantFailure(
+            long delayMs
+    ) {
+        stopPlayer();
+
+        normalListeningBlockedUntil =
+                System.currentTimeMillis()
+                        + Math.max(250L, delayMs);
+
+        resumeAfterAssistant(
+                Math.max(250L, delayMs)
+        );
     }
 
     private void stopPlayer() {

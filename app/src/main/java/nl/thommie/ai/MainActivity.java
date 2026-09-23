@@ -68,6 +68,9 @@ public class MainActivity extends Activity {
     private boolean pendingManualPermission = false;
     private boolean conversationModeActive = false;
     private long conversationExpiresAt = 0L;
+    private boolean assistantSpeaking = false;
+    private long normalListeningBlockedUntil = 0L;
+    private static final long POST_TTS_COOLDOWN_MS = 850L;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -200,7 +203,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.8  •  PERSONAL AI TERMINAL"
+                "v0.8.1  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -259,7 +262,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.8 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.8.1 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -371,6 +374,21 @@ public class MainActivity extends Activity {
     }
 
     private void ask(String q) {
+        if (isConversationEndCommand(q)) {
+            endConversationSession();
+
+            stateText.setText(
+                    "STANDBY • HEY MAATJE"
+            );
+
+            normalListeningBlockedUntil =
+                    System.currentTimeMillis()
+                            + 500L;
+
+            scheduleWakeListening(550);
+            return;
+        }
+
         PersonalitySettings.CommandResult personalityCommand =
                 PersonalitySettings.handleCommand(this, q);
 
@@ -755,7 +773,20 @@ public class MainActivity extends Activity {
 
         if (!appVisible
                 || speechRecognizer == null
-                || chatBusy) {
+                || chatBusy
+                || assistantSpeaking) {
+            return;
+        }
+
+        long blockedFor =
+                normalListeningBlockedUntil
+                        - System.currentTimeMillis();
+
+        if (blockedFor > 0L) {
+            mainHandler.postDelayed(
+                    this::startCommandListeningInternal,
+                    blockedFor + 25L
+            );
             return;
         }
 
@@ -793,10 +824,22 @@ public class MainActivity extends Activity {
         if (!wakeWordEnabled
                 || !appVisible
                 || chatBusy
+                || assistantSpeaking
                 || mediaPlayer != null
                 || offlineWakeWord == null
                 || wakeWordListening
                 || commandListening) {
+            return;
+        }
+
+        long blockedFor =
+                normalListeningBlockedUntil
+                        - System.currentTimeMillis();
+
+        if (blockedFor > 0L) {
+            scheduleWakeListening(
+                    blockedFor + 25L
+            );
             return;
         }
 
@@ -1032,7 +1075,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.8 – Instellingen"
+                        "MAATJE v0.8.1 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -1146,7 +1189,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8 – Geheugen"
+                                "MAATJE v0.8.1 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1236,7 +1279,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.8 – API"
+                                "MAATJE v0.8.1 – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1352,8 +1395,20 @@ public class MainActivity extends Activity {
         if (!conversationModeActive
                 || !ConversationSettings.enabled(this)
                 || !appVisible
-                || chatBusy) {
+                || chatBusy
+                || assistantSpeaking) {
             return;
+        }
+
+        long blockedFor =
+                normalListeningBlockedUntil
+                        - System.currentTimeMillis();
+
+        if (blockedFor > 0L) {
+            delayMs = Math.max(
+                    delayMs,
+                    blockedFor + 25L
+            );
         }
 
         if (resetWindow
@@ -1393,7 +1448,10 @@ public class MainActivity extends Activity {
                     if (conversationModeActive
                             && isConversationWindowOpen()
                             && !chatBusy
-                            && mediaPlayer == null) {
+                            && !assistantSpeaking
+                            && mediaPlayer == null
+                            && System.currentTimeMillis()
+                            >= normalListeningBlockedUntil) {
                         startCommandListeningInternal();
                     }
                 },
@@ -1484,6 +1542,10 @@ public class MainActivity extends Activity {
 
         stopPlayer();
 
+        normalListeningBlockedUntil =
+                System.currentTimeMillis()
+                        + 200L;
+
         stateText.setText("GESTOPT");
 
         if (conversationModeActive) {
@@ -1515,14 +1577,32 @@ public class MainActivity extends Activity {
                         )
                         .trim();
 
-        return normalized.equals("maatje klaar")
-                || normalized.equals("maartje klaar")
-                || normalized.equals("stop gesprek")
-                || normalized.equals("stop het gesprek")
-                || normalized.equals("slaap maar")
-                || normalized.equals("ga maar slapen")
-                || normalized.equals("maatje stop")
-                || normalized.equals("maartje stop");
+        if (normalized.isEmpty()) {
+            return false;
+        }
+
+        if (normalized.contains("stop gesprek")
+                || normalized.contains("stop het gesprek")
+                || normalized.contains("slaap maar")
+                || normalized.contains("ga maar slapen")) {
+            return true;
+        }
+
+        boolean mentionsMaatje =
+                normalized.contains("maatje")
+                        || normalized.contains("maartje")
+                        || normalized.contains("maatie");
+
+        boolean endWord =
+                normalized.contains(" klaar")
+                        || normalized.startsWith("klaar ")
+                        || normalized.endsWith(" klaar")
+                        || normalized.contains(" standby")
+                        || normalized.contains(" slapen")
+                        || normalized.contains(" stop")
+                        || normalized.startsWith("stop ");
+
+        return mentionsMaatje && endWord;
     }
 
     private void updateWakeDebug(
@@ -1729,6 +1809,10 @@ public class MainActivity extends Activity {
 
             mediaPlayer.setOnPreparedListener(
                     mp -> {
+                        assistantSpeaking = true;
+
+                        stopRecognitionSession();
+
                         mp.start();
 
                         mainHandler.postDelayed(
@@ -1750,8 +1834,15 @@ public class MainActivity extends Activity {
                             offlineWakeWord.stop();
                         }
 
+                        assistantSpeaking = false;
+                        normalListeningBlockedUntil =
+                                System.currentTimeMillis()
+                                        + POST_TTS_COOLDOWN_MS;
+
                         file.delete();
-                        resumeAfterAssistant(450);
+                        resumeAfterAssistant(
+                                POST_TTS_COOLDOWN_MS
+                        );
                     }
             );
 
@@ -1767,8 +1858,13 @@ public class MainActivity extends Activity {
                             offlineWakeWord.stop();
                         }
 
+                        assistantSpeaking = false;
+                        normalListeningBlockedUntil =
+                                System.currentTimeMillis()
+                                        + 500L;
+
                         file.delete();
-                        resumeAfterAssistant(700);
+                        resumeAfterAssistant(550);
                         return true;
                     }
             );
@@ -1776,6 +1872,7 @@ public class MainActivity extends Activity {
             mediaPlayer.prepareAsync();
 
         } catch (Exception e) {
+            assistantSpeaking = false;
             file.delete();
 
             Toast.makeText(
@@ -1788,6 +1885,8 @@ public class MainActivity extends Activity {
     }
 
     private void stopPlayer() {
+        assistantSpeaking = false;
+
         if (offlineWakeWord != null) {
             offlineWakeWord.stop();
         }

@@ -95,6 +95,9 @@ final class PersonalitySettings {
         StringBuilder sb = new StringBuilder();
 
         sb.append("Actuele persoonlijkheidsinstellingen van MAATJE:\n");
+        sb.append("BELANGRIJK: deze waarden zijn de actuele bron van waarheid. ");
+        sb.append("Ze overschrijven elke oudere of afwijkende waarde die eerder in het gesprek is genoemd. ");
+        sb.append("Als de gebruiker naar een huidige instelling vraagt, gebruik uitsluitend deze actuele waarden.\n");
         sb.append("- Mood: ").append(mood).append("\n");
         sb.append("- Humor: ").append(humor).append("/100\n");
         sb.append("- Sarcasme: ").append(sarcasm).append("/100\n");
@@ -164,6 +167,87 @@ final class PersonalitySettings {
 
         String lower = input.trim().toLowerCase(Locale.ROOT);
         if (lower.isEmpty()) return new CommandResult(false, "");
+
+        if (asksForAllSettings(lower)) {
+            return new CommandResult(
+                    true,
+                    currentSettingsSummary(c)
+            );
+        }
+
+        if (asksForSettingValue(lower)) {
+            if (containsAny(
+                    lower,
+                    "humor",
+                    "grappig",
+                    "grappigheid"
+            )) {
+                return currentValue(
+                        "Humor",
+                        humor(c)
+                );
+            }
+
+            if (containsAny(
+                    lower,
+                    "sarcasme",
+                    "sarcastisch"
+            )) {
+                return currentValue(
+                        "Sarcasme",
+                        sarcasm(c)
+                );
+            }
+
+            if (containsAny(
+                    lower,
+                    "droogheid",
+                    "droge humor",
+                    "deadpan"
+            )) {
+                return currentValue(
+                        "Droogheid",
+                        dry(c)
+                );
+            }
+
+            if (containsAny(
+                    lower,
+                    "enthousiasme",
+                    "enthousiast"
+            )) {
+                return currentValue(
+                        "Enthousiasme",
+                        enthusiasm(c)
+                );
+            }
+
+            if (containsAny(
+                    lower,
+                    "schelden",
+                    "vloeken",
+                    "gevloek"
+            )) {
+                return currentValue(
+                        "Schelden",
+                        profanity(c)
+                );
+            }
+
+            if (containsAny(
+                    lower,
+                    "mood",
+                    "modus",
+                    "stemming"
+            )) {
+                return new CommandResult(
+                        true,
+                        "Mood staat op "
+                                + mood(c)
+                                + "."
+                );
+            }
+        }
 
         Integer numeric;
 
@@ -320,6 +404,64 @@ final class PersonalitySettings {
         }
 
         return new CommandResult(false, "");
+    }
+
+    private static boolean asksForAllSettings(
+            String input
+    ) {
+        return containsAny(
+                input,
+                "wat zijn je instellingen",
+                "wat zijn jouw instellingen",
+                "wat zijn de instellingen",
+                "persoonlijkheidsinstellingen",
+                "hoe sta je ingesteld",
+                "hoe ben je ingesteld"
+        );
+    }
+
+    private static boolean asksForSettingValue(
+            String input
+    ) {
+        return containsAny(
+                input,
+                "op hoeveel",
+                "hoeveel procent",
+                "welk percentage",
+                "welke stand",
+                "wat is je",
+                "wat is jouw",
+                "waar staat je",
+                "waar staat jouw",
+                "hoe hoog staat",
+                "hoe staat je",
+                "hoe staat jouw"
+        );
+    }
+
+    private static CommandResult currentValue(
+            String name,
+            int value
+    ) {
+        return new CommandResult(
+                true,
+                name
+                        + " staat momenteel op "
+                        + value
+                        + "%."
+        );
+    }
+
+    private static String currentSettingsSummary(
+            Context c
+    ) {
+        return "Mijn actuele instellingen zijn: "
+                + "humor " + humor(c) + "%, "
+                + "sarcasme " + sarcasm(c) + "%, "
+                + "droogheid " + dry(c) + "%, "
+                + "enthousiasme " + enthusiasm(c) + "%, "
+                + "schelden " + profanity(c) + "% "
+                + "en mood " + mood(c) + ".";
     }
 
     static boolean captureHumorFeedback(
@@ -531,7 +673,7 @@ final class PersonalitySettings {
         box.addView(reset);
 
         AlertDialog dialog = new AlertDialog.Builder(activity)
-                .setTitle("MAATJE v0.5 – Persoonlijkheid")
+                .setTitle("MAATJE v0.8.1 – Persoonlijkheid")
                 .setView(scroll)
                 .setPositiveButton("Opslaan", null)
                 .setNegativeButton("Annuleren", null)

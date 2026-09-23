@@ -53,6 +53,7 @@ public class MainActivity extends Activity {
     private Button sendButton;
     private SpeechRecognizer speechRecognizer;
     private MediaPlayer mediaPlayer;
+    private OfflineWakeWord offlineWakeWord;
     private String lastAssistantReply = "";
     private final Handler mainHandler =
             new Handler(Looper.getMainLooper());
@@ -84,6 +85,53 @@ public class MainActivity extends Activity {
         buildUi();
         initSpeechRecognizer();
         wakeWordEnabled = WakeWordSettings.enabled(this);
+
+        offlineWakeWord =
+                new OfflineWakeWord(
+                        this,
+                        new OfflineWakeWord.Callback() {
+                            @Override
+                            public void onReady() {
+                                stateText.setText(
+                                        "WAKE MODEL READY"
+                                );
+
+                                scheduleWakeListening(
+                                        300
+                                );
+                            }
+
+                            @Override
+                            public void onDetected() {
+                                wakeWordListening = false;
+
+                                stateText.setText("YES?");
+
+                                mainHandler.postDelayed(
+                                        MainActivity.this
+                                                ::startCommandListeningInternal,
+                                        350
+                                );
+                            }
+
+                            @Override
+                            public void onError(
+                                    String message
+                            ) {
+                                stateText.setText(
+                                        "WAKE ERROR"
+                                );
+
+                                Toast.makeText(
+                                        MainActivity.this,
+                                        message,
+                                        Toast.LENGTH_LONG
+                                ).show();
+                            }
+                        }
+                );
+
+        offlineWakeWord.prepare();
 
         if (SecurePrefs.loadApiKey(this).isEmpty()) {
             showApiKeyDialog(true);
@@ -129,7 +177,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.6.1  •  PERSONAL AI TERMINAL"
+                "v0.7  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -169,8 +217,8 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.6.1 gebruikt OpenAI cloud voice, "
-                        + "blijvend gespreksgeheugen, lokaal profielgeheugen en \"Hey Maatje\" activatie."
+                        + "MAATJE v0.7 gebruikt OpenAI cloud voice, "
+                        + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
         transcript.setTextSize(16);
@@ -619,6 +667,12 @@ public class MainActivity extends Activity {
     }
 
     private void startCommandListeningInternal() {
+        if (offlineWakeWord != null) {
+            offlineWakeWord.stop();
+        }
+
+        wakeWordListening = false;
+
         if (!appVisible
                 || speechRecognizer == null
                 || chatBusy) {
@@ -656,7 +710,7 @@ public class MainActivity extends Activity {
                 || !appVisible
                 || chatBusy
                 || mediaPlayer != null
-                || speechRecognizer == null
+                || offlineWakeWord == null
                 || wakeWordListening
                 || commandListening) {
             return;
@@ -669,6 +723,15 @@ public class MainActivity extends Activity {
             return;
         }
 
+        if (!offlineWakeWord.isReady()) {
+            stateText.setText(
+                    "PREPARING WAKE MODEL"
+            );
+
+            offlineWakeWord.prepare();
+            return;
+        }
+
         wakeWordListening = true;
         commandListening = false;
 
@@ -676,14 +739,7 @@ public class MainActivity extends Activity {
                 "STANDBY • HEY MAATJE"
         );
 
-        try {
-            speechRecognizer.startListening(
-                    createRecognizerIntent(true)
-            );
-        } catch (Exception e) {
-            wakeWordListening = false;
-            scheduleWakeListening(1000);
-        }
+        offlineWakeWord.start();
     }
 
     private Intent createRecognizerIntent(
@@ -830,14 +886,21 @@ public class MainActivity extends Activity {
                 wakeRestartRunnable
         );
 
-        if (speechRecognizer == null) return;
-
-        if (wakeWordListening
-                || commandListening) {
-            ignoreNextRecognitionError = true;
+        if (offlineWakeWord != null) {
+            offlineWakeWord.stop();
         }
 
         wakeWordListening = false;
+
+        if (speechRecognizer == null) {
+            commandListening = false;
+            return;
+        }
+
+        if (commandListening) {
+            ignoreNextRecognitionError = true;
+        }
+
         commandListening = false;
 
         try {
@@ -883,7 +946,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.6.1 – Instellingen"
+                        "MAATJE v0.7 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -985,7 +1048,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.6.1 – Geheugen"
+                                "MAATJE v0.7 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1075,7 +1138,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.6.1 – API"
+                                "MAATJE v0.7 – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1409,6 +1472,10 @@ public class MainActivity extends Activity {
 
         if (speechRecognizer != null) {
             speechRecognizer.destroy();
+        }
+
+        if (offlineWakeWord != null) {
+            offlineWakeWord.destroy();
         }
 
         stopPlayer();

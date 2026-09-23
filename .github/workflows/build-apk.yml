@@ -1,4 +1,4 @@
-name: Build MAATJE v0.6.1 APK
+name: Build MAATJE v0.7 APK
 
 on:
   workflow_dispatch:
@@ -34,6 +34,20 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Add Dutch offline wake model
+        shell: bash
+        run: |
+          rm -rf app/src/main/assets/model-nl /tmp/vosk-nl
+          mkdir -p app/src/main/assets /tmp/vosk-nl
+          curl -L --fail --retry 3             "https://alphacephei.com/vosk/models/vosk-model-small-nl-0.22.zip"             -o /tmp/vosk-nl/model.zip
+          unzip -q /tmp/vosk-nl/model.zip -d /tmp/vosk-nl
+          mv /tmp/vosk-nl/vosk-model-small-nl-0.22 app/src/main/assets/model-nl
+          printf '%s
+' "maatje-nl-v0.22" > app/src/main/assets/model-nl/uuid
+          test -f app/src/main/assets/model-nl/am/final.mdl
+          test -f app/src/main/assets/model-nl/conf/model.conf
+          test -f app/src/main/assets/model-nl/uuid
+
       - name: Restore permanent signing key
         shell: bash
         env:
@@ -52,17 +66,17 @@ jobs:
           gradle --no-daemon assembleRelease --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/release/app-release.apk MAATJE_v0.6.1.apk
+        run: cp app/build/outputs/apk/release/app-release.apk MAATJE_v0.7.apk
 
       - name: Verify APK signature
         run: |
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify \
-            --print-certs MAATJE_v0.6.1.apk
+            --print-certs MAATJE_v0.7.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MAATJE_v0.6.1
-          path: MAATJE_v0.6.1.apk
+          name: MAATJE_v0.7
+          path: MAATJE_v0.7.apk
           if-no-files-found: error
           retention-days: 30

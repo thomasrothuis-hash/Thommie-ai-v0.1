@@ -1,8 +1,18 @@
-# MAATJE v0.9.0
+# MAATJE v0.9.1
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
 
-## v0.9.0 features
+## v0.9.1 features
+
+- Local Device Control layer; common phone actions bypass the cloud for speed.
+- Flashlight on/off/toggle using CameraManager.
+- Media volume status, up/down, mute, max and percentage control.
+- System brightness status and percentage/up/down control with Android WRITE_SETTINGS consent.
+- Battery percentage, charging state and temperature.
+- Open camera, Wi-Fi settings and Bluetooth settings.
+- Open installed launcher apps by spoken/display name.
+- Basic device and Android version information.
+- New Toestelbediening settings panel for permissions.
 
 - OpenAI Responses API web_search tool with automatic tool choice.
 - Internet setting: Automatic or Off.
@@ -58,7 +68,7 @@ gradle assembleDebug
 Expected output:
 `app/build/outputs/apk/debug/app-debug.apk`
 
-## Planned v0.9.0
+## Planned v0.9.1
 - Local wake word ("Hey ChatGPT")
 - Auto-start on boot
 - Optional launcher/kiosk mode
@@ -68,4 +78,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_AI_v0.9.0.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_AI_v0.9.1.apk` as a workflow artifact.

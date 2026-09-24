@@ -227,7 +227,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.9.0  •  PERSONAL AI TERMINAL"
+                "v0.9.1  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -293,7 +293,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.9.0 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.9.1 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -484,6 +484,34 @@ public class MainActivity extends Activity {
                             + 500L;
 
             scheduleWakeListening(550);
+            return;
+        }
+
+        DeviceControl.CommandResult deviceCommand =
+                DeviceControl.handleCommand(
+                        this,
+                        q
+                );
+
+        if (deviceCommand.handled) {
+            append("\n\nJIJ\n" + q);
+            append(
+                    "\n\nMAATJE\n"
+                            + deviceCommand.message
+            );
+
+            if (stateText != null
+                    && deviceCommand.state != null
+                    && !deviceCommand.state.isEmpty()) {
+                stateText.setText(
+                        deviceCommand.state
+                );
+            }
+
+            setLastAssistantReply(
+                    deviceCommand.message
+            );
+            speak(deviceCommand.message);
             return;
         }
 
@@ -1268,6 +1296,7 @@ public class MainActivity extends Activity {
         String[] options = {
                 "API-key",
                 "Internet",
+                "Toestelbediening",
                 "Stem & audio",
                 "Geheugen",
                 "Persoonlijkheid",
@@ -1277,7 +1306,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.9.0 – Instellingen"
+                        "MAATJE v0.9.1 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -1287,15 +1316,17 @@ public class MainActivity extends Activity {
                             } else if (which == 1) {
                                 InternetSettings.show(this);
                             } else if (which == 2) {
+                                DeviceControl.showSettings(this);
+                            } else if (which == 3) {
                                 VoiceSettings.show(
                                         this,
                                         this::testCloudVoice
                                 );
-                            } else if (which == 3) {
-                                showMemoryDialog();
                             } else if (which == 4) {
-                                PersonalitySettings.show(this);
+                                showMemoryDialog();
                             } else if (which == 5) {
+                                PersonalitySettings.show(this);
+                            } else if (which == 6) {
                                 ConversationSettings.show(
                                         this,
                                         enabled -> {
@@ -1393,7 +1424,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.9.0 – Geheugen"
+                                "MAATJE v0.9.1 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1483,7 +1514,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.9.0 – API"
+                                "MAATJE v0.9.1 – API"
                         )
                         .setView(box)
                         .setPositiveButton(

@@ -35,17 +35,29 @@ final class OpenAiClient {
         final String text;
         final boolean webUsed;
         final List<Source> sources;
+        final long inputTokens;
+        final long outputTokens;
+        final long totalTokens;
+        final long cachedTokens;
 
         Reply(
                 String responseId,
                 String text,
                 boolean webUsed,
-                List<Source> sources
+                List<Source> sources,
+                long inputTokens,
+                long outputTokens,
+                long totalTokens,
+                long cachedTokens
         ) {
             this.responseId = responseId;
             this.text = text;
             this.webUsed = webUsed;
             this.sources = sources;
+            this.inputTokens = inputTokens;
+            this.outputTokens = outputTokens;
+            this.totalTokens = totalTokens;
+            this.cachedTokens = cachedTokens;
         }
     }
 
@@ -58,7 +70,7 @@ final class OpenAiClient {
         JSONObject body = new JSONObject();
         JSONObject metadata = new JSONObject();
         metadata.put("app", "MAATJE");
-        metadata.put("version", "0.9.0");
+        metadata.put("version", "0.9.2");
         body.put("metadata", metadata);
 
         writeJson(conn, body);
@@ -179,6 +191,25 @@ final class OpenAiClient {
         boolean webUsed = containsWebSearchCall(root);
         List<Source> sources = extractWebSources(root);
 
+        JSONObject usage = root.optJSONObject("usage");
+        long inputTokens = usage == null
+                ? 0L : usage.optLong("input_tokens", 0L);
+        long outputTokens = usage == null
+                ? 0L : usage.optLong("output_tokens", 0L);
+        long totalTokens = usage == null
+                ? inputTokens + outputTokens
+                : usage.optLong("total_tokens", inputTokens + outputTokens);
+
+        long cachedTokens = 0L;
+        if (usage != null) {
+            JSONObject details =
+                    usage.optJSONObject("input_tokens_details");
+            if (details != null) {
+                cachedTokens =
+                        details.optLong("cached_tokens", 0L);
+            }
+        }
+
         if (!sources.isEmpty()) {
             webUsed = true;
         }
@@ -191,7 +222,11 @@ final class OpenAiClient {
                 id,
                 text,
                 webUsed,
-                sources
+                sources,
+                inputTokens,
+                outputTokens,
+                totalTokens,
+                cachedTokens
         );
     }
 

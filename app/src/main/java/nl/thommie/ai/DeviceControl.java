@@ -3,6 +3,7 @@ package nl.thommie.ai;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.provider.AlarmClock;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -18,6 +19,8 @@ import android.os.Build;
 import android.provider.MediaStore;
 import android.provider.Settings;
 
+import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
@@ -68,6 +71,18 @@ final class DeviceControl {
         }
 
         String q = normalize(raw);
+
+        CommandResult timer =
+                handleTimer(activity, raw, q);
+        if (timer.handled) {
+            return timer;
+        }
+
+        CommandResult alarm =
+                handleAlarm(activity, raw, q);
+        if (alarm.handled) {
+            return alarm;
+        }
 
         CommandResult torch =
                 handleTorch(
@@ -158,6 +173,7 @@ final class DeviceControl {
 
         String message =
                 "Lokale toestelbediening in MAATJE:\n\n"
+                        + "• Timers en wekkers\n"
                         + "• Zaklamp\n"
                         + "• Media-volume\n"
                         + "• Schermhelderheid\n"
@@ -178,7 +194,7 @@ final class DeviceControl {
         AlertDialog dialog =
                 new AlertDialog.Builder(activity)
                         .setTitle(
-                                "MAATJE v0.9.1 – Toestelbediening"
+                                "MAATJE v0.9.2 – Toestelbediening"
                         )
                         .setMessage(message)
                         .setPositiveButton(
@@ -225,6 +241,127 @@ final class DeviceControl {
         });
 
         dialog.show();
+    }
+
+    private static CommandResult handleTimer(
+            Activity activity,
+            String raw,
+            String q
+    ) {
+        if (!q.contains("timer")) {
+            return CommandResult.no();
+        }
+
+        if (q.contains("open") || q.contains("toon") || q.contains("bekijk")) {
+            try {
+                activity.startActivity(new Intent(AlarmClock.ACTION_SHOW_TIMERS));
+                return new CommandResult(true, "Timers geopend.", "DEVICE • TIMERS");
+            } catch (Exception e) {
+                return new CommandResult(true, "Ik kon de timers niet openen.", "DEVICE • TIMER ERROR");
+            }
+        }
+
+        int seconds = parseDurationSeconds(q);
+        if (seconds <= 0) {
+            return new CommandResult(
+                    true,
+                    "Zeg bijvoorbeeld: zet een timer van 10 minuten.",
+                    "DEVICE • TIMER"
+            );
+        }
+
+        String label = extractTimerLabel(raw);
+        if (label.isEmpty()) {
+            label = "MAATJE";
+        }
+
+        try {
+            Intent intent = new Intent(AlarmClock.ACTION_SET_TIMER);
+            intent.putExtra(AlarmClock.EXTRA_LENGTH, seconds);
+            intent.putExtra(AlarmClock.EXTRA_MESSAGE, label);
+            intent.putExtra(AlarmClock.EXTRA_SKIP_UI, true);
+            activity.startActivity(intent);
+
+            return new CommandResult(
+                    true,
+                    "Timer gezet voor " + formatDuration(seconds) + ".",
+                    "DEVICE • TIMER SET"
+            );
+        } catch (Exception e) {
+            return new CommandResult(
+                    true,
+                    "Timer instellen lukte niet: " + safeMessage(e),
+                    "DEVICE • TIMER ERROR"
+            );
+        }
+    }
+
+    private static CommandResult handleAlarm(
+            Activity activity,
+            String raw,
+            String q
+    ) {
+        if (!q.contains("wekker") && !q.contains("alarm")) {
+            return CommandResult.no();
+        }
+
+        if (q.contains("open") || q.contains("toon") || q.contains("bekijk")) {
+            try {
+                activity.startActivity(new Intent(AlarmClock.ACTION_SHOW_ALARMS));
+                return new CommandResult(true, "Wekkers geopend.", "DEVICE • ALARMS");
+            } catch (Exception e) {
+                return new CommandResult(true, "Ik kon de wekkers niet openen.", "DEVICE • ALARM ERROR");
+            }
+        }
+
+        int[] time = parseAlarmTime(q);
+        if (time == null) {
+            return new CommandResult(
+                    true,
+                    "Zeg bijvoorbeeld: zet een wekker om 07:30.",
+                    "DEVICE • ALARM"
+            );
+        }
+
+        String label = extractAlarmLabel(raw);
+        if (label.isEmpty()) {
+            label = "MAATJE";
+        }
+
+        try {
+            Intent intent = new Intent(AlarmClock.ACTION_SET_ALARM);
+            intent.putExtra(AlarmClock.EXTRA_HOUR, time[0]);
+            intent.putExtra(AlarmClock.EXTRA_MINUTES, time[1]);
+            intent.putExtra(AlarmClock.EXTRA_MESSAGE, label);
+            intent.putExtra(AlarmClock.EXTRA_SKIP_UI, true);
+
+            if (q.contains("morgen")) {
+                Calendar tomorrow = Calendar.getInstance();
+                tomorrow.add(Calendar.DAY_OF_YEAR, 1);
+                ArrayList<Integer> days = new ArrayList<>();
+                days.add(tomorrow.get(Calendar.DAY_OF_WEEK));
+                intent.putIntegerArrayListExtra(AlarmClock.EXTRA_DAYS, days);
+            }
+
+            activity.startActivity(intent);
+
+            return new CommandResult(
+                    true,
+                    String.format(
+                            Locale.ROOT,
+                            "Wekker gezet om %02d:%02d.",
+                            time[0],
+                            time[1]
+                    ),
+                    "DEVICE • ALARM SET"
+            );
+        } catch (Exception e) {
+            return new CommandResult(
+                    true,
+                    "Wekker instellen lukte niet: " + safeMessage(e),
+                    "DEVICE • ALARM ERROR"
+            );
+        }
     }
 
     private static CommandResult handleTorch(
@@ -1029,6 +1166,219 @@ final class DeviceControl {
         }
 
         return null;
+    }
+
+    private static int parseDurationSeconds(
+            String q
+    ) {
+        long seconds = 0L;
+        boolean matched = false;
+
+        Matcher hour = Pattern.compile(
+                "(\\d{1,3})\\s*(?:uur|uren|u\\b)"
+        ).matcher(q);
+        while (hour.find()) {
+            seconds += Long.parseLong(hour.group(1)) * 3600L;
+            matched = true;
+        }
+
+        Matcher minute = Pattern.compile(
+                "(\\d{1,4})\\s*(?:minuut|minuten|min\\b)"
+        ).matcher(q);
+        while (minute.find()) {
+            seconds += Long.parseLong(minute.group(1)) * 60L;
+            matched = true;
+        }
+
+        Matcher second = Pattern.compile(
+                "(\\d{1,5})\\s*(?:seconde|seconden|sec\\b)"
+        ).matcher(q);
+        while (second.find()) {
+            seconds += Long.parseLong(second.group(1));
+            matched = true;
+        }
+
+        if (q.contains("anderhalf uur")) {
+            seconds += 5400L;
+            matched = true;
+        } else if (q.contains("half uur")) {
+            seconds += 1800L;
+            matched = true;
+        }
+
+        if (q.contains("kwartier")) {
+            seconds += 900L;
+            matched = true;
+        }
+
+        if (!matched) {
+            Matcher bare = Pattern.compile(
+                    "timer(?:\\s+van|\\s+voor)?\\s+(\\d{1,4})(?:\\s|$)"
+            ).matcher(q);
+            if (bare.find()) {
+                seconds = Long.parseLong(bare.group(1)) * 60L;
+                matched = true;
+            }
+        }
+
+        if (!matched) return 0;
+
+        return (int) Math.min(
+                Integer.MAX_VALUE,
+                Math.max(1L, seconds)
+        );
+    }
+
+    private static int[] parseAlarmTime(
+            String q
+    ) {
+        Matcher clock = Pattern.compile(
+                "(?:om\\s+)?([01]?\\d|2[0-3])[:.]([0-5]\\d)"
+        ).matcher(q);
+        if (clock.find()) {
+            return new int[]{
+                    Integer.parseInt(clock.group(1)),
+                    Integer.parseInt(clock.group(2))
+            };
+        }
+
+        Matcher half = Pattern.compile(
+                "half\\s+([a-z]+|\\d{1,2})"
+        ).matcher(q);
+        if (half.find()) {
+            Integer next = parseHourToken(half.group(1));
+            if (next != null) {
+                return new int[]{(next + 23) % 24, 30};
+            }
+        }
+
+        Matcher over = Pattern.compile(
+                "kwart\\s+over\\s+([a-z]+|\\d{1,2})"
+        ).matcher(q);
+        if (over.find()) {
+            Integer hour = parseHourToken(over.group(1));
+            if (hour != null) {
+                return new int[]{hour, 15};
+            }
+        }
+
+        Matcher before = Pattern.compile(
+                "kwart\\s+voor\\s+([a-z]+|\\d{1,2})"
+        ).matcher(q);
+        if (before.find()) {
+            Integer next = parseHourToken(before.group(1));
+            if (next != null) {
+                return new int[]{(next + 23) % 24, 45};
+            }
+        }
+
+        Matcher simple = Pattern.compile(
+                "(?:om\\s+)([a-z]+|\\d{1,2})(?:\\s+uur)?"
+        ).matcher(q);
+        if (simple.find()) {
+            Integer hour = parseHourToken(simple.group(1));
+            if (hour != null) {
+                return new int[]{hour, 0};
+            }
+        }
+
+        return null;
+    }
+
+    private static Integer parseHourToken(
+            String token
+    ) {
+        if (token == null) return null;
+
+        try {
+            int value = Integer.parseInt(token);
+            if (value >= 0 && value <= 23) return value;
+        } catch (Exception ignored) {}
+
+        switch (token) {
+            case "nul": return 0;
+            case "een": return 1;
+            case "twee": return 2;
+            case "drie": return 3;
+            case "vier": return 4;
+            case "vijf": return 5;
+            case "zes": return 6;
+            case "zeven": return 7;
+            case "acht": return 8;
+            case "negen": return 9;
+            case "tien": return 10;
+            case "elf": return 11;
+            case "twaalf": return 12;
+            case "dertien": return 13;
+            case "veertien": return 14;
+            case "vijftien": return 15;
+            case "zestien": return 16;
+            case "zeventien": return 17;
+            case "achttien": return 18;
+            case "negentien": return 19;
+            case "twintig": return 20;
+            case "eenentwintig": return 21;
+            case "tweeentwintig":
+            case "tweeëntwintig": return 22;
+            case "drieentwintig":
+            case "drieëntwintig": return 23;
+            default: return null;
+        }
+    }
+
+    private static String formatDuration(
+            int totalSeconds
+    ) {
+        int hours = totalSeconds / 3600;
+        int minutes = (totalSeconds % 3600) / 60;
+        int seconds = totalSeconds % 60;
+        StringBuilder sb = new StringBuilder();
+
+        if (hours > 0) {
+            sb.append(hours).append(" uur");
+        }
+        if (minutes > 0) {
+            if (sb.length() > 0) sb.append(" en ");
+            sb.append(minutes)
+                    .append(minutes == 1 ? " minuut" : " minuten");
+        }
+        if (seconds > 0 || sb.length() == 0) {
+            if (sb.length() > 0) sb.append(" en ");
+            sb.append(seconds)
+                    .append(seconds == 1 ? " seconde" : " seconden");
+        }
+        return sb.toString();
+    }
+
+    private static String extractTimerLabel(
+            String raw
+    ) {
+        if (raw == null) return "";
+        String lower = raw.toLowerCase(Locale.ROOT);
+        Matcher m = Pattern.compile(
+                "(?i)\\bvoor\\s+(?:de\\s+)?([\\p{L}][\\p{L}\\s-]{1,30})$"
+        ).matcher(raw);
+        if (!m.find()) return "";
+
+        String candidate = m.group(1).trim();
+        String normalized = normalize(candidate);
+        if (normalized.matches(
+                ".*(?:minuut|minuten|seconde|seconden|uur|uren|kwartier).*"
+        )) {
+            return "";
+        }
+        return candidate;
+    }
+
+    private static String extractAlarmLabel(
+            String raw
+    ) {
+        if (raw == null) return "";
+        Matcher m = Pattern.compile(
+                "(?i)\\bvoor\\s+(?:de\\s+)?([\\p{L}][\\p{L}\\s-]{1,30})$"
+        ).matcher(raw);
+        if (!m.find()) return "";
+        return m.group(1).trim();
     }
 
     private static Integer extractPercent(

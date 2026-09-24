@@ -53,6 +53,7 @@ public class MainActivity extends Activity {
 
     private TextView stateText;
     private TextView wakeDebugText;
+    private TextView usageText;
     private TextView transcript;
     private EditText input;
     private Button micButton;
@@ -227,7 +228,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.9.1  •  PERSONAL AI TERMINAL"
+                "v0.9.2  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -283,6 +284,17 @@ public class MainActivity extends Activity {
 
         root.addView(wakeDebugText);
 
+        usageText = new TextView(this);
+        usageText.setGravity(Gravity.CENTER);
+        usageText.setTextColor(MUTED);
+        usageText.setTextSize(10);
+        usageText.setTypeface(Typeface.MONOSPACE);
+        usageText.setPadding(0, dp(5), 0, 0);
+        usageText.setText(
+                UsageTracker.compactLine(this)
+        );
+        root.addView(usageText);
+
         GradientDrawable panelBg =
                 roundRect(
                         PANEL,
@@ -293,7 +305,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.9.1 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.9.2 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -633,6 +645,21 @@ public class MainActivity extends Activity {
                         append(
                                 formatWebSources(
                                         reply.sources
+                                )
+                        );
+                    }
+
+                    UsageTracker.record(
+                            MainActivity.this,
+                            reply.inputTokens,
+                            reply.outputTokens,
+                            reply.totalTokens
+                    );
+
+                    if (usageText != null) {
+                        usageText.setText(
+                                UsageTracker.compactLine(
+                                        MainActivity.this
                                 )
                         );
                     }
@@ -1296,6 +1323,7 @@ public class MainActivity extends Activity {
         String[] options = {
                 "API-key",
                 "Internet",
+                "Gebruik & tokens",
                 "Toestelbediening",
                 "Stem & audio",
                 "Geheugen",
@@ -1306,7 +1334,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.9.1 – Instellingen"
+                        "MAATJE v0.9.2 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -1316,17 +1344,19 @@ public class MainActivity extends Activity {
                             } else if (which == 1) {
                                 InternetSettings.show(this);
                             } else if (which == 2) {
-                                DeviceControl.showSettings(this);
+                                UsageTracker.show(this);
                             } else if (which == 3) {
+                                DeviceControl.showSettings(this);
+                            } else if (which == 4) {
                                 VoiceSettings.show(
                                         this,
                                         this::testCloudVoice
                                 );
-                            } else if (which == 4) {
-                                showMemoryDialog();
                             } else if (which == 5) {
-                                PersonalitySettings.show(this);
+                                showMemoryDialog();
                             } else if (which == 6) {
+                                PersonalitySettings.show(this);
+                            } else if (which == 7) {
                                 ConversationSettings.show(
                                         this,
                                         enabled -> {
@@ -1424,7 +1454,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.9.1 – Geheugen"
+                                "MAATJE v0.9.2 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1514,7 +1544,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.9.1 – API"
+                                "MAATJE v0.9.2 – API"
                         )
                         .setView(box)
                         .setPositiveButton(

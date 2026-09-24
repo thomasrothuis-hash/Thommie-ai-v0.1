@@ -1,8 +1,15 @@
-# MAATJE v0.9.1
+# MAATJE v0.9.2
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
 
-## v0.9.1 features
+## v0.9.2 features
+
+- Local timers via Android AlarmClock with hours, minutes and seconds.
+- Local alarms/wekkers including 24-hour times, half zeven, kwart over and kwart voor.
+- Exact Responses API input/output/total token usage after every assistant response.
+- Compact live token/context meter in the main terminal.
+- Usage & tokens panel with last request, app-session totals, persistent totals and estimated Luna model-token cost.
+- Context headroom indicator based on GPT-5.6 Luna's 1.05M context window; this is not an API-credit balance.
 
 - Local Device Control layer; common phone actions bypass the cloud for speed.
 - Flashlight on/off/toggle using CameraManager.
@@ -68,7 +75,7 @@ gradle assembleDebug
 Expected output:
 `app/build/outputs/apk/debug/app-debug.apk`
 
-## Planned v0.9.1
+## Planned v0.9.2
 - Local wake word ("Hey ChatGPT")
 - Auto-start on boot
 - Optional launcher/kiosk mode
@@ -78,4 +85,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_AI_v0.9.1.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_AI_v0.9.2.apk` as a workflow artifact.

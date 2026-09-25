@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="KioskTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">#040805</item>
+        <item name="android:textColorPrimary">#D8F0DE</item>
+        <item name="android:textColorSecondary">#698B71</item>
+        <item name="android:colorAccent">#36DC68</item>
+        <item name="android:statusBarColor">#040805</item>
+        <item name="android:navigationBarColor">#040805</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

@@ -1,6 +1,20 @@
-# MAATJE v1.2.1
+# MAATJE v1.3.0 + MAATJE Kiosk v1.0.0
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## v1.3.0 dedicated OnePlus kiosk integration
+
+- Adds the separate MAATJE Kiosk v1.0.0 Android app as a second signed application module.
+- Kiosk is designed to become Device Owner and the persistent HOME launcher on the dedicated OnePlus.
+- Strict Lock Task allowlist contains only MAATJE and MAATJE Kiosk; configurable SystemUI features are disabled.
+- Adds a 5-tap MAATJE-logo admin entry protected by a locally hashed 4–8 digit management PIN.
+- Adds maintenance mode for opening Android Settings only after PIN authentication.
+- Adds a local Wi-Fi APK update receiver with one-time code, QR code and signing-certificate validation.
+- Device Owner uses PackageInstaller for admin-driven MAATJE updates without Play Store.
+- Adds a signature-protected privileged bridge for Wi-Fi, Bluetooth and global location controls.
+- MAATJE gains a Kiosk & toestelcontrole panel plus voice commands for these privileged controls.
+- Kiosk automatically grants useful declared runtime permissions to MAATJE when Device Owner is active.
+- Recovery-safe first release intentionally does not disable USB debugging or factory reset yet.
 
 ## v1.2.1 manual stop hotfix
 

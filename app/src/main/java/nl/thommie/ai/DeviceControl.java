@@ -72,6 +72,20 @@ final class DeviceControl {
 
         String q = normalize(raw);
 
+        String kioskResult =
+                KioskBridge.handleVoiceCommand(
+                        activity,
+                        raw
+                );
+
+        if (kioskResult != null) {
+            return new CommandResult(
+                    true,
+                    kioskResult,
+                    "DEVICE • KIOSK"
+            );
+        }
+
         CommandResult timer =
                 handleTimer(activity, raw, q);
         if (timer.handled) {
@@ -194,7 +208,7 @@ final class DeviceControl {
         AlertDialog dialog =
                 new AlertDialog.Builder(activity)
                         .setTitle(
-                                "MAATJE v1.2.1 – Toestelbediening"
+                                "MAATJE v1.3.0 – Toestelbediening"
                         )
                         .setMessage(message)
                         .setPositiveButton(

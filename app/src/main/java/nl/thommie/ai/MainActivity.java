@@ -128,6 +128,8 @@ public class MainActivity extends Activity {
     private boolean cameraFront = false;
     private boolean cameraQuestionPending = false;
     private String latestCameraDataUrl = "";
+    private int kioskLogoTapCount = 0;
+    private long kioskFirstLogoTapMs = 0L;
     private long normalListeningBlockedUntil = 0L;
     private static final long POST_TTS_COOLDOWN_MS = 850L;
 
@@ -301,6 +303,10 @@ public class MainActivity extends Activity {
                         Typeface.BOLD
                 )
         );
+        title.setClickable(true);
+        title.setOnClickListener(
+                v -> handleKioskLogoTap()
+        );
         header.addView(
                 title,
                 new LinearLayout.LayoutParams(
@@ -325,7 +331,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v1.2.1  •  PERSONAL AI TERMINAL"
+                "v1.3.0  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -557,7 +563,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v1.2.1 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v1.3.0 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -2346,6 +2352,35 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void handleKioskLogoTap() {
+        long now =
+                System.currentTimeMillis();
+
+        if (kioskFirstLogoTapMs == 0L
+                || now - kioskFirstLogoTapMs > 2200L) {
+            kioskFirstLogoTapMs = now;
+            kioskLogoTapCount = 1;
+            return;
+        }
+
+        kioskLogoTapCount++;
+
+        if (kioskLogoTapCount >= 5) {
+            kioskLogoTapCount = 0;
+            kioskFirstLogoTapMs = 0L;
+
+            if (!KioskBridge.openAdminUnlock(
+                    this
+            )) {
+                Toast.makeText(
+                        this,
+                        "MAATJE Kiosk is niet geïnstalleerd.",
+                        Toast.LENGTH_SHORT
+                ).show();
+            }
+        }
+    }
+
     private void showSettingsMenu() {
         String[] options = {
                 "API-key",
@@ -2353,6 +2388,7 @@ public class MainActivity extends Activity {
                 "Standaard assistent",
                 "Gebruik & tokens",
                 "Toestelbediening",
+                "Kiosk & toestelcontrole",
                 "Stem & audio",
                 "Geheugen",
                 "Persoonlijkheid",
@@ -2362,7 +2398,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v1.2.1 – Instellingen"
+                        "MAATJE v1.3.0 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -2378,15 +2414,17 @@ public class MainActivity extends Activity {
                             } else if (which == 4) {
                                 DeviceControl.showSettings(this);
                             } else if (which == 5) {
+                                KioskBridge.showDevicePanel(this);
+                            } else if (which == 6) {
                                 VoiceSettings.show(
                                         this,
                                         this::testCloudVoice
                                 );
-                            } else if (which == 6) {
-                                showMemoryDialog();
                             } else if (which == 7) {
-                                PersonalitySettings.show(this);
+                                showMemoryDialog();
                             } else if (which == 8) {
+                                PersonalitySettings.show(this);
+                            } else if (which == 9) {
                                 ConversationSettings.show(
                                         this,
                                         enabled -> {
@@ -2487,7 +2525,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.2.1 – Geheugen"
+                                "MAATJE v1.3.0 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -2577,7 +2615,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.2.1 – API"
+                                "MAATJE v1.3.0 – API"
                         )
                         .setView(box)
                         .setPositiveButton(

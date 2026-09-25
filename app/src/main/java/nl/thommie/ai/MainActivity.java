@@ -17,16 +17,19 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.speech.RecognitionListener;
+import android.util.Base64;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.text.InputType;
 import android.text.method.ScrollingMovementMethod;
 import android.view.Gravity;
+import android.view.TextureView;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -42,8 +45,11 @@ public class MainActivity extends Activity {
             "maatje_assistant_invocation";
     public static final String EXTRA_ASSISTANT_SOURCE =
             "maatje_assistant_source";
+    public static final String EXTRA_CAMERA_INVOCATION =
+            "maatje_camera_invocation";
 
     private static final int REQ_AUDIO = 1001;
+    private static final int REQ_CAMERA = 1002;
     private static final int BG = Color.rgb(4, 8, 5);
     private static final int PANEL = Color.rgb(9, 17, 11);
     private static final int MINT = Color.rgb(54, 220, 104);
@@ -64,6 +70,12 @@ public class MainActivity extends Activity {
     private Button micButton;
     private AudioWaveformView waveformView;
     private RealtimeVoiceClient realtimeVoiceClient;
+    private CameraVisionController cameraVisionController;
+    private LinearLayout cameraPanel;
+    private TextureView cameraPreview;
+    private TextView cameraStatusText;
+    private Button cameraButton;
+    private Button cameraSwitchButton;
     private boolean realtimeConnected = false;
     private boolean realtimeAssistantSpeaking = false;
     private Button sendButton;
@@ -81,6 +93,22 @@ public class MainActivity extends Activity {
     private String lastAssistantReply = "";
     private final Handler mainHandler =
             new Handler(Looper.getMainLooper());
+    private final Runnable cameraFrameRunnable =
+            new Runnable() {
+                @Override
+                public void run() {
+                    if (!cameraVisionActive
+                            || cameraVisionController == null) {
+                        return;
+                    }
+
+                    cameraVisionController.captureFrame();
+                    mainHandler.postDelayed(
+                            this,
+                            1000L
+                    );
+                }
+            };
 
     private boolean wakeWordEnabled = true;
     private boolean wakeWordListening = false;
@@ -93,6 +121,12 @@ public class MainActivity extends Activity {
     private long conversationExpiresAt = 0L;
     private boolean assistantSpeaking = false;
     private boolean pendingAssistantInvocation = false;
+    private boolean pendingCameraInvocation = false;
+    private boolean pendingCameraPermission = false;
+    private boolean cameraVisionActive = false;
+    private boolean cameraFront = false;
+    private boolean cameraQuestionPending = false;
+    private String latestCameraDataUrl = "";
     private long normalListeningBlockedUntil = 0L;
     private static final long POST_TTS_COOLDOWN_MS = 850L;
 
@@ -211,6 +245,13 @@ public class MainActivity extends Activity {
         )) {
             pendingAssistantInvocation = true;
         }
+
+        if (intent.getBooleanExtra(
+                EXTRA_CAMERA_INVOCATION,
+                false
+        )) {
+            pendingCameraInvocation = true;
+        }
     }
 
     @Override
@@ -222,6 +263,13 @@ public class MainActivity extends Activity {
         consumeAssistantIntent(intent);
 
         if (appVisible
+                && pendingCameraInvocation) {
+            pendingCameraInvocation = false;
+            mainHandler.postDelayed(
+                    this::startCameraVision,
+                    250L
+            );
+        } else if (appVisible
                 && pendingAssistantInvocation) {
             pendingAssistantInvocation = false;
 
@@ -276,7 +324,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v1.1.3  •  PERSONAL AI TERMINAL"
+                "v1.2.0  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -323,6 +371,150 @@ public class MainActivity extends Activity {
         waveformLp.bottomMargin = dp(4);
         root.addView(waveformView, waveformLp);
 
+        cameraPanel = new LinearLayout(this);
+        cameraPanel.setOrientation(LinearLayout.VERTICAL);
+        cameraPanel.setVisibility(View.GONE);
+        cameraPanel.setPadding(
+                dp(8),
+                dp(8),
+                dp(8),
+                dp(8)
+        );
+        cameraPanel.setBackground(
+                roundRect(
+                        PANEL,
+                        18,
+                        MINT
+                )
+        );
+
+        FrameLayout previewFrame =
+                new FrameLayout(this);
+
+        cameraPreview =
+                new TextureView(this);
+        previewFrame.addView(
+                cameraPreview,
+                new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                )
+        );
+
+        cameraStatusText =
+                new TextView(this);
+        cameraStatusText.setText(
+                "CAMERA OFF"
+        );
+        cameraStatusText.setTextColor(MINT);
+        cameraStatusText.setTextSize(11);
+        cameraStatusText.setTypeface(
+                Typeface.create(
+                        Typeface.MONOSPACE,
+                        Typeface.BOLD
+                )
+        );
+        cameraStatusText.setPadding(
+                dp(10),
+                dp(6),
+                dp(10),
+                dp(6)
+        );
+
+        FrameLayout.LayoutParams statusLp =
+                new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                );
+        statusLp.gravity =
+                Gravity.TOP | Gravity.START;
+        previewFrame.addView(
+                cameraStatusText,
+                statusLp
+        );
+
+        cameraPanel.addView(
+                previewFrame,
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        dp(175)
+                )
+        );
+
+        LinearLayout cameraControls =
+                new LinearLayout(this);
+        cameraControls.setOrientation(
+                LinearLayout.HORIZONTAL
+        );
+        cameraControls.setGravity(
+                Gravity.CENTER_VERTICAL
+        );
+
+        cameraSwitchButton =
+                button(
+                        "↺  WISSEL",
+                        PANEL,
+                        MINT
+                );
+        cameraSwitchButton.setTextSize(11);
+        cameraSwitchButton.setOnClickListener(
+                v -> switchCameraVision()
+        );
+
+        Button cameraStopButton =
+                button(
+                        "■  STOP CAMERA",
+                        PANEL,
+                        MINT
+                );
+        cameraStopButton.setTextSize(11);
+        cameraStopButton.setOnClickListener(
+                v -> stopCameraVision()
+        );
+
+        LinearLayout.LayoutParams cameraControlLp =
+                new LinearLayout.LayoutParams(
+                        0,
+                        dp(42),
+                        1f
+                );
+        cameraControlLp.topMargin = dp(6);
+
+        cameraControls.addView(
+                cameraSwitchButton,
+                cameraControlLp
+        );
+
+        LinearLayout.LayoutParams stopCameraLp =
+                new LinearLayout.LayoutParams(
+                        0,
+                        dp(42),
+                        1f
+                );
+        stopCameraLp.topMargin = dp(6);
+        stopCameraLp.leftMargin = dp(6);
+
+        cameraControls.addView(
+                cameraStopButton,
+                stopCameraLp
+        );
+
+        cameraPanel.addView(
+                cameraControls
+        );
+
+        LinearLayout.LayoutParams cameraPanelLp =
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+        cameraPanelLp.topMargin = dp(6);
+        cameraPanelLp.bottomMargin = dp(6);
+        root.addView(
+                cameraPanel,
+                cameraPanelLp
+        );
+
         wakeDebugText = new TextView(this);
         wakeDebugText.setGravity(Gravity.CENTER);
         wakeDebugText.setTextColor(MUTED);
@@ -364,7 +556,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v1.1.3 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v1.2.0 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -435,6 +627,32 @@ public class MainActivity extends Activity {
                         dp(58),
                         dp(58)
                 )
+        );
+
+        cameraButton = button(
+                "📷",
+                PANEL,
+                MINT
+        );
+        cameraButton.setOnClickListener(
+                v -> {
+                    if (cameraVisionActive) {
+                        stopCameraVision();
+                    } else {
+                        startCameraVision();
+                    }
+                }
+        );
+
+        LinearLayout.LayoutParams cameraButtonLp =
+                new LinearLayout.LayoutParams(
+                        dp(58),
+                        dp(58)
+                );
+        cameraButtonLp.leftMargin = dp(8);
+        composer.addView(
+                cameraButton,
+                cameraButtonLp
         );
 
         input = new EditText(this);
@@ -1028,6 +1246,323 @@ public class MainActivity extends Activity {
         );
     }
 
+    private void startCameraVision() {
+        if (!appVisible) {
+            return;
+        }
+
+        if (checkSelfPermission(
+                Manifest.permission.CAMERA
+        ) != PackageManager.PERMISSION_GRANTED) {
+            pendingCameraPermission = true;
+
+            requestPermissions(
+                    new String[]{
+                            Manifest.permission.CAMERA
+                    },
+                    REQ_CAMERA
+            );
+            return;
+        }
+
+        pendingCameraPermission = false;
+
+        if (cameraVisionActive) {
+            return;
+        }
+
+        cameraVisionActive = true;
+        cameraQuestionPending = false;
+        latestCameraDataUrl = "";
+
+        if (cameraPanel != null) {
+            cameraPanel.setVisibility(
+                    View.VISIBLE
+            );
+        }
+
+        if (cameraButton != null) {
+            cameraButton.setText("📷✓");
+        }
+
+        if (cameraStatusText != null) {
+            cameraStatusText.setText(
+                    "CAMERA STARTING..."
+            );
+        }
+
+        if (offlineWakeWord != null) {
+            offlineWakeWord.stop();
+        }
+
+        if (realtimeVoiceClient == null
+                || !realtimeVoiceClient.isRunning()) {
+            startRealtimeVoice();
+        }
+
+        CameraVisionController old =
+                cameraVisionController;
+
+        if (old != null) {
+            old.stop();
+        }
+
+        cameraVisionController =
+                new CameraVisionController(
+                        this,
+                        cameraPreview,
+                        new CameraVisionController.Callback() {
+                            @Override
+                            public void onCameraReady(
+                                    boolean front
+                            ) {
+                                cameraFront = front;
+
+                                if (cameraStatusText != null) {
+                                    cameraStatusText.setText(
+                                            front
+                                                    ? "CAMERA LIVE • FRONT"
+                                                    : "CAMERA LIVE • REAR"
+                                    );
+                                }
+
+                                RealtimeVoiceClient client =
+                                        realtimeVoiceClient;
+
+                                if (client != null
+                                        && client.isRunning()) {
+                                    client.setCameraMode(true);
+                                }
+
+                                mainHandler.removeCallbacks(
+                                        cameraFrameRunnable
+                                );
+                                mainHandler.post(
+                                        cameraFrameRunnable
+                                );
+                            }
+
+                            @Override
+                            public void onFrame(
+                                    byte[] jpeg
+                            ) {
+                                if (!cameraVisionActive
+                                        || jpeg == null
+                                        || jpeg.length == 0) {
+                                    return;
+                                }
+
+                                String dataUrl =
+                                        "data:image/jpeg;base64,"
+                                                + Base64.encodeToString(
+                                                        jpeg,
+                                                        Base64.NO_WRAP
+                                                );
+
+                                latestCameraDataUrl =
+                                        dataUrl;
+
+                                RealtimeVoiceClient client =
+                                        realtimeVoiceClient;
+
+                                if (client == null
+                                        || !client.isRunning()) {
+                                    return;
+                                }
+
+                                boolean answerNow =
+                                        cameraQuestionPending;
+
+                                if (answerNow) {
+                                    cameraQuestionPending =
+                                            false;
+                                }
+
+                                if (realtimeAssistantSpeaking
+                                        && !answerNow) {
+                                    return;
+                                }
+
+                                client.sendCameraFrame(
+                                        dataUrl,
+                                        answerNow
+                                );
+
+                                if (cameraStatusText != null) {
+                                    cameraStatusText.setText(
+                                            answerNow
+                                                    ? "CAMERA LIVE • ANALYZING"
+                                                    : (
+                                                            cameraFront
+                                                                    ? "CAMERA LIVE • FRONT"
+                                                                    : "CAMERA LIVE • REAR"
+                                                    )
+                                    );
+                                }
+                            }
+
+                            @Override
+                            public void onError(
+                                    String message
+                            ) {
+                                if (cameraStatusText != null) {
+                                    cameraStatusText.setText(
+                                            "CAMERA ERROR"
+                                    );
+                                }
+
+                                Toast.makeText(
+                                        MainActivity.this,
+                                        message,
+                                        Toast.LENGTH_LONG
+                                ).show();
+                            }
+                        }
+                );
+
+        cameraVisionController.start(
+                cameraFront
+        );
+    }
+
+    private void stopCameraVision() {
+        cameraVisionActive = false;
+        cameraQuestionPending = false;
+        latestCameraDataUrl = "";
+
+        mainHandler.removeCallbacks(
+                cameraFrameRunnable
+        );
+
+        CameraVisionController controller =
+                cameraVisionController;
+        cameraVisionController = null;
+
+        if (controller != null) {
+            controller.stop();
+        }
+
+        RealtimeVoiceClient client =
+                realtimeVoiceClient;
+
+        if (client != null
+                && client.isRunning()) {
+            client.setCameraMode(false);
+        }
+
+        if (cameraPanel != null) {
+            cameraPanel.setVisibility(
+                    View.GONE
+            );
+        }
+
+        if (cameraButton != null) {
+            cameraButton.setText("📷");
+        }
+
+        if (cameraStatusText != null) {
+            cameraStatusText.setText(
+                    "CAMERA OFF"
+            );
+        }
+    }
+
+    private void switchCameraVision() {
+        if (!cameraVisionActive
+                || cameraVisionController == null) {
+            return;
+        }
+
+        cameraFront = !cameraFront;
+
+        if (cameraStatusText != null) {
+            cameraStatusText.setText(
+                    "SWITCHING CAMERA..."
+            );
+        }
+
+        cameraVisionController.start(
+                cameraFront
+        );
+    }
+
+    private boolean handleRealtimeCameraCommand(
+            String raw
+    ) {
+        if (raw == null) {
+            return false;
+        }
+
+        String q =
+                raw.toLowerCase(
+                        java.util.Locale.ROOT
+                );
+
+        boolean cameraMention =
+                q.contains("camera")
+                        || q.contains("meekijken")
+                        || q.contains("mee kijken")
+                        || q.contains("lens");
+
+        if (!cameraMention) {
+            return false;
+        }
+
+        if (q.contains("stop")
+                || q.contains("uit")
+                || q.contains("sluit")
+                || q.contains("klaar met")) {
+            RealtimeVoiceClient client =
+                    realtimeVoiceClient;
+
+            if (client != null) {
+                client.cancelResponse();
+            }
+
+            stopCameraVision();
+
+            append(
+                    "\n\nMAATJE\nCamera meekijken gestopt."
+            );
+            return true;
+        }
+
+        if (q.contains("wissel")
+                || q.contains("switch")
+                || q.contains("andere camera")
+                || q.contains("frontcamera")
+                || q.contains("achtercamera")) {
+            RealtimeVoiceClient client =
+                    realtimeVoiceClient;
+
+            if (client != null) {
+                client.cancelResponse();
+            }
+
+            switchCameraVision();
+            return true;
+        }
+
+        if (q.contains("kijk")
+                || q.contains("open")
+                || q.contains("aan")
+                || q.contains("start")
+                || q.contains("meekijken")
+                || q.contains("mee kijken")) {
+            RealtimeVoiceClient client =
+                    realtimeVoiceClient;
+
+            if (client != null) {
+                client.cancelResponse();
+            }
+
+            startCameraVision();
+            return true;
+        }
+
+        return false;
+    }
+
     private void toggleRealtimeVoice() {
         if (realtimeVoiceClient != null
                 && realtimeVoiceClient.isRunning()) {
@@ -1099,6 +1634,12 @@ public class MainActivity extends Activity {
                                     waveformView.setMode(
                                             AudioWaveformView.MODE_USER
                                     );
+
+                                    if (cameraVisionActive
+                                            && realtimeVoiceClient != null) {
+                                        realtimeVoiceClient
+                                                .setCameraMode(true);
+                                    }
                                 });
                             }
 
@@ -1151,7 +1692,9 @@ public class MainActivity extends Activity {
                             public void onUserSpeechStopped() {
                                 runOnUiThread(() -> {
                                     stateText.setText(
-                                            "RESPONDING • LIVE"
+                                            cameraVisionActive
+                                                    ? "CAMERA • CAPTURING"
+                                                    : "RESPONDING • LIVE"
                                     );
                                     waveformView.setMode(
                                             AudioWaveformView.MODE_IDLE
@@ -1167,12 +1710,32 @@ public class MainActivity extends Activity {
                                 if (complete
                                         && text != null
                                         && !text.trim().isEmpty()) {
-                                    runOnUiThread(() ->
-                                            append(
-                                                    "\n\nJIJ\n"
-                                                            + text.trim()
-                                            )
-                                    );
+                                    final String clean =
+                                            text.trim();
+
+                                    runOnUiThread(() -> {
+                                        append(
+                                                "\n\nJIJ\n"
+                                                        + clean
+                                        );
+
+                                        if (handleRealtimeCameraCommand(
+                                                clean
+                                        )) {
+                                            return;
+                                        }
+
+                                        if (cameraVisionActive
+                                                && cameraVisionController
+                                                != null) {
+                                            cameraQuestionPending = true;
+                                            stateText.setText(
+                                                    "CAMERA • CAPTURING"
+                                            );
+                                            cameraVisionController
+                                                    .captureFrame();
+                                        }
+                                    });
                                 }
                             }
 
@@ -1216,7 +1779,9 @@ public class MainActivity extends Activity {
                                         );
                                     } else if (realtimeConnected) {
                                         stateText.setText(
-                                                "LISTENING • REALTIME"
+                                                cameraVisionActive
+                                                        ? "CAMERA LIVE • LISTENING"
+                                                        : "LISTENING • REALTIME"
                                         );
                                         waveformView.setMode(
                                                 AudioWaveformView
@@ -1293,7 +1858,9 @@ public class MainActivity extends Activity {
                                 + "zelfverzekerde vrouwelijke "
                                 + "assistentstijl. Wacht tot je hele "
                                 + "antwoord is uitgesproken voordat je "
-                                + "weer luistert."
+                                + "weer luistert. "
+                                + "Wanneer cameramodus actief is, krijg je steeds het nieuwste live camerabeeld als input_image. "
+                                + "Gebruik dat beeld daadwerkelijk bij vragen over wat zichtbaar is en doe niet alsof je iets ziet dat niet in het beeld staat."
                 );
 
         String voiceStyle =
@@ -1677,6 +2244,26 @@ public class MainActivity extends Activity {
             MaatjeVoiceInteractionService
                     .refreshFromActivity();
         }
+
+        if (requestCode == REQ_CAMERA) {
+            boolean granted =
+                    grantResults.length > 0
+                            && grantResults[0]
+                            == PackageManager.PERMISSION_GRANTED;
+
+            if (granted
+                    && pendingCameraPermission) {
+                pendingCameraPermission = false;
+                startCameraVision();
+            } else if (!granted) {
+                pendingCameraPermission = false;
+                Toast.makeText(
+                        this,
+                        "Cameratoegang is nodig om live mee te kijken.",
+                        Toast.LENGTH_LONG
+                ).show();
+            }
+        }
     }
 
     private void showSettingsMenu() {
@@ -1695,7 +2282,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v1.1.3 – Instellingen"
+                        "MAATJE v1.2.0 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -1820,7 +2407,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.1.3 – Geheugen"
+                                "MAATJE v1.2.0 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1910,7 +2497,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.1.3 – API"
+                                "MAATJE v1.2.0 – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -2892,7 +3479,16 @@ public class MainActivity extends Activity {
             );
         }
 
-        if (pendingAssistantInvocation) {
+        if (pendingCameraInvocation) {
+            pendingCameraInvocation = false;
+            stateText.setText(
+                    "CAMERA • STARTING"
+            );
+            mainHandler.postDelayed(
+                    this::startCameraVision,
+                    300L
+            );
+        } else if (pendingAssistantInvocation) {
             pendingAssistantInvocation = false;
 
             stateText.setText(
@@ -2911,6 +3507,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         appVisible = false;
+        stopCameraVision();
         stopRealtimeVoice();
         endConversationSession();
         stopRecognitionSession();
@@ -2938,6 +3535,7 @@ public class MainActivity extends Activity {
             offlineWakeWord.destroy();
         }
 
+        stopCameraVision();
         stopPlayer();
     }
 

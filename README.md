@@ -1,6 +1,20 @@
-# MAATJE v1.1.3
+# MAATJE v1.2.0
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## v1.2.0 live camera vision
+
+- Adds a native Camera2 live preview directly inside the MAATJE main screen.
+- Adds a camera button plus rear/front camera switching and an explicit CAMERA LIVE indicator.
+- Realtime voice can start camera vision through phrases such as "kijk mee met mijn camera".
+- The assistant overlay forwards camera requests into the main app and starts camera vision automatically.
+- Camera mode keeps server VAD transcription active but delays the model response until a fresh camera frame has been captured.
+- Sends a fresh JPEG input_image into the same gpt-realtime-2.1 conversation for every spoken camera turn.
+- Refreshes visual context around once per second while camera mode is active, while the local preview remains smooth.
+- Removes the previous live-camera item before adding the next one so old frames do not accumulate in realtime conversation context.
+- Suppresses background camera-frame updates while MAATJE is speaking, avoiding mid-response context churn.
+- Camera access stops automatically when the app leaves the foreground.
+- Keeps realtime voice, internet search, waveform and v1.1.2 echo-lock behavior intact.
 
 ## v1.1.3 internet restore
 
@@ -197,4 +211,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v1.1.3.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v1.2.0.apk` as a workflow artifact.

@@ -1076,6 +1076,55 @@ final class MaatjeVoiceInteractionSession
         return prompt.toString();
     }
 
+    private boolean isCameraVisionCommand(
+            String normalized
+    ) {
+        if (normalized == null) {
+            return false;
+        }
+
+        boolean cameraMention =
+                normalized.contains("camera")
+                        || normalized.contains("meekijken")
+                        || normalized.contains("mee kijken")
+                        || normalized.contains("lens");
+
+        if (!cameraMention) {
+            return false;
+        }
+
+        return normalized.contains("kijk")
+                || normalized.contains("open")
+                || normalized.contains("start")
+                || normalized.contains("aan")
+                || normalized.contains("meekijken")
+                || normalized.contains("mee kijken");
+    }
+
+    private void launchCameraVisionActivity() {
+        if (realtimeVoiceClient != null) {
+            realtimeVoiceClient.cancelResponse();
+        }
+
+        Intent intent =
+                new Intent(
+                        context,
+                        MainActivity.class
+                )
+                        .addFlags(
+                                Intent.FLAG_ACTIVITY_NEW_TASK
+                                        | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                        | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        )
+                        .putExtra(
+                                MainActivity.EXTRA_CAMERA_INVOCATION,
+                                true
+                        );
+
+        context.startActivity(intent);
+        finishOverlay();
+    }
+
     private void handleRealtimeTranscript(
             String query
     ) {
@@ -1096,6 +1145,11 @@ final class MaatjeVoiceInteractionSession
             }
 
             finishOverlay();
+            return;
+        }
+
+        if (isCameraVisionCommand(normalized)) {
+            launchCameraVisionActivity();
             return;
         }
 

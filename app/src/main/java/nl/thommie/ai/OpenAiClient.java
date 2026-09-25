@@ -74,7 +74,7 @@ final class OpenAiClient {
         JSONObject body = new JSONObject();
         JSONObject metadata = new JSONObject();
         metadata.put("app", "MAATJE");
-        metadata.put("version", "1.1.3");
+        metadata.put("version", "1.2.0");
         body.put("metadata", metadata);
 
         writeJson(conn, body);

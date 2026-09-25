@@ -87,6 +87,9 @@ final class RealtimeVoiceClient {
     private String apiKey;
     private String instructions;
     private String voice;
+    private volatile boolean cameraMode = false;
+    private volatile String latestCameraItemId = "";
+    private volatile boolean awaitingCameraItem = false;
 
     private StringBuilder userTranscript =
             new StringBuilder();
@@ -127,6 +130,9 @@ final class RealtimeVoiceClient {
         recentOutputLevel = 0f;
         lastAssistantAudioMs = 0L;
         clearBargeInCandidate();
+        cameraMode = false;
+        latestCameraItemId = "";
+        awaitingCameraItem = false;
 
         httpClient =
                 new OkHttpClient.Builder()
@@ -232,6 +238,9 @@ final class RealtimeVoiceClient {
         recentOutputLevel = 0f;
         lastAssistantAudioMs = 0L;
         clearBargeInCandidate();
+        cameraMode = false;
+        latestCameraItemId = "";
+        awaitingCameraItem = false;
         playbackGeneration.incrementAndGet();
 
         stopAudioOnly();
@@ -289,6 +298,194 @@ final class RealtimeVoiceClient {
         }
 
         flushOutput();
+    }
+
+    void setCameraMode(
+            boolean active
+    ) {
+        cameraMode = active;
+
+        if (!socketReady.get()) {
+            return;
+        }
+
+        try {
+            JSONObject turnDetection =
+                    new JSONObject()
+                            .put(
+                                    "type",
+                                    "server_vad"
+                            )
+                            .put(
+                                    "threshold",
+                                    0.48
+                            )
+                            .put(
+                                    "prefix_padding_ms",
+                                    220
+                            )
+                            .put(
+                                    "silence_duration_ms",
+                                    360
+                            )
+                            .put(
+                                    "create_response",
+                                    !active
+                            )
+                            .put(
+                                    "interrupt_response",
+                                    false
+                            );
+
+            JSONObject session =
+                    new JSONObject()
+                            .put(
+                                    "type",
+                                    "realtime"
+                            )
+                            .put(
+                                    "audio",
+                                    new JSONObject()
+                                            .put(
+                                                    "input",
+                                                    new JSONObject()
+                                                            .put(
+                                                                    "turn_detection",
+                                                                    turnDetection
+                                                            )
+                                            )
+                            );
+
+            send(
+                    new JSONObject()
+                            .put(
+                                    "type",
+                                    "session.update"
+                            )
+                            .put(
+                                    "session",
+                                    session
+                            )
+            );
+
+        } catch (Exception e) {
+            listener.onError(
+                    safeMessage(e)
+            );
+        }
+    }
+
+    void sendCameraFrame(
+            String imageDataUrl,
+            boolean createResponse
+    ) {
+        if (imageDataUrl == null
+                || imageDataUrl.trim().isEmpty()
+                || !socketReady.get()) {
+            return;
+        }
+
+        try {
+            String previous =
+                    latestCameraItemId;
+
+            if (previous != null
+                    && !previous.isEmpty()) {
+                send(
+                        new JSONObject()
+                                .put(
+                                        "type",
+                                        "conversation.item.delete"
+                                )
+                                .put(
+                                        "item_id",
+                                        previous
+                                )
+                );
+
+                latestCameraItemId = "";
+            }
+
+            JSONArray content =
+                    new JSONArray()
+                            .put(
+                                    new JSONObject()
+                                            .put(
+                                                    "type",
+                                                    "input_image"
+                                            )
+                                            .put(
+                                                    "image_url",
+                                                    imageDataUrl
+                                            )
+                            )
+                            .put(
+                                    new JSONObject()
+                                            .put(
+                                                    "type",
+                                                    "input_text"
+                                            )
+                                            .put(
+                                                    "text",
+                                                    "[MAATJE_LIVE_CAMERA_FRAME] "
+                                                            + "Dit is het meest recente live camerabeeld. "
+                                                            + "Gebruik dit beeld als de gebruiker naar de camera of iets zichtbaars verwijst."
+                                            )
+                            );
+
+            JSONObject item =
+                    new JSONObject()
+                            .put(
+                                    "type",
+                                    "message"
+                            )
+                            .put(
+                                    "role",
+                                    "user"
+                            )
+                            .put(
+                                    "content",
+                                    content
+                            );
+
+            awaitingCameraItem = true;
+
+            send(
+                    new JSONObject()
+                            .put(
+                                    "type",
+                                    "conversation.item.create"
+                            )
+                            .put(
+                                    "item",
+                                    item
+                            )
+            );
+
+            if (createResponse) {
+                send(
+                        new JSONObject()
+                                .put(
+                                        "type",
+                                        "response.create"
+                                )
+                                .put(
+                                        "response",
+                                        new JSONObject()
+                                                .put(
+                                                        "output_modalities",
+                                                        new JSONArray()
+                                                                .put("audio")
+                                                )
+                                )
+                );
+            }
+
+        } catch (Exception e) {
+            listener.onError(
+                    safeMessage(e)
+            );
+        }
     }
 
     void sendImageQuestion(
@@ -1178,6 +1375,50 @@ final class RealtimeVoiceClient {
         }
     }
 
+    private boolean isLiveCameraItem(
+            JSONObject item
+    ) {
+        if (item == null
+                || !"message".equals(
+                        item.optString("type")
+                )
+                || !"user".equals(
+                        item.optString("role")
+                )) {
+            return false;
+        }
+
+        JSONArray content =
+                item.optJSONArray("content");
+
+        if (content == null) {
+            return false;
+        }
+
+        for (int i = 0; i < content.length(); i++) {
+            JSONObject part =
+                    content.optJSONObject(i);
+
+            if (part == null
+                    || !"input_text".equals(
+                            part.optString("type")
+                    )) {
+                continue;
+            }
+
+            if (part.optString(
+                    "text",
+                    ""
+            ).contains(
+                    "[MAATJE_LIVE_CAMERA_FRAME]"
+            )) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private void handleServerEvent(
             String raw
     ) {
@@ -1195,6 +1436,24 @@ final class RealtimeVoiceClient {
                 case "session.updated":
                     listener.onConnected();
                     break;
+
+                case "conversation.item.added": {
+                    JSONObject item =
+                            event.optJSONObject(
+                                    "item"
+                            );
+
+                    if (awaitingCameraItem
+                            && isLiveCameraItem(item)) {
+                        latestCameraItemId =
+                                item.optString(
+                                        "id",
+                                        ""
+                                );
+                        awaitingCameraItem = false;
+                    }
+                    break;
+                }
 
                 case "input_audio_buffer.speech_started":
                     userTranscript =

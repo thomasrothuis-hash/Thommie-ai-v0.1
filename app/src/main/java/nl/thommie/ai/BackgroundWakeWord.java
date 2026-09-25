@@ -271,11 +271,18 @@ final class BackgroundWakeWord {
             );
 
             synchronized (this) {
+                if (audioRecord == record) {
+                    audioRecord = null;
+                }
+
+                if (audioThread
+                        == Thread.currentThread()) {
+                    audioThread = null;
+                }
+
                 if (generation
                         == localGeneration) {
                     running = false;
-                    audioRecord = null;
-                    audioThread = null;
                 }
             }
         }
@@ -321,15 +328,14 @@ final class BackgroundWakeWord {
         }
     }
 
-    synchronized void stop() {
-        running = false;
-        ++generation;
+    void stop() {
+        AudioRecord record;
 
-        AudioRecord record =
-                audioRecord;
-
-        audioRecord = null;
-        audioThread = null;
+        synchronized (this) {
+            running = false;
+            ++generation;
+            record = audioRecord;
+        }
 
         if (record != null) {
             try {
@@ -341,8 +347,35 @@ final class BackgroundWakeWord {
         }
     }
 
-    synchronized void destroy() {
+    void stopAndWait(
+            long timeoutMs
+    ) {
+        Thread thread;
+
         stop();
+
+        synchronized (this) {
+            thread = audioThread;
+        }
+
+        if (thread != null
+                && thread != Thread.currentThread()) {
+            try {
+                thread.join(
+                        Math.max(
+                                0L,
+                                timeoutMs
+                        )
+                );
+            } catch (InterruptedException e) {
+                Thread.currentThread()
+                        .interrupt();
+            }
+        }
+    }
+
+    synchronized void destroy() {
+        stopAndWait(900L);
 
         if (model != null) {
             try {

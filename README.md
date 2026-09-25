@@ -1,6 +1,16 @@
-# MAATJE v0.9.4
+# MAATJE v0.9.4.1
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## v0.9.4.1 fixes
+
+- Hard microphone handoff: the Vosk wake-word AudioRecord is fully stopped and its capture thread gets time to release before overlay speech recognition starts.
+- Recreates the Android SpeechRecognizer for every overlay listen attempt and uses the same system-selected provider as the working full MAATJE app.
+- Adds one automatic retry for AUDIO, CLIENT and RECOGNIZER BUSY speech errors.
+- Shows useful MIC diagnostics in the overlay instead of hiding all speech errors behind "Ik verstond je niet".
+- Centers the close icon using a padding-free TextView.
+- Adds a subtle three-layer green glow around the full screen while the assistant overlay is active.
+- Makes the VoiceInteractionSession full-screen transparent while keeping the MAATJE card at the bottom, so the foreground app stays visible.
 
 ## v0.9.4 features
 
@@ -116,4 +126,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v0.9.4.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v0.9.4.1.apk` as a workflow artifact.

@@ -77,6 +77,7 @@ final class MaatjeVoiceInteractionSession
     private boolean thinking = false;
     private boolean speaking = false;
     private boolean sessionVisible = false;
+    private int speechRetryCount = 0;
 
     MaatjeVoiceInteractionSession(
             Context context
@@ -91,8 +92,6 @@ final class MaatjeVoiceInteractionSession
 
         setKeepAwake(true);
         setUiEnabled(true);
-
-        createSpeechRecognizer();
     }
 
     @Override
@@ -102,6 +101,102 @@ final class MaatjeVoiceInteractionSession
 
         root.setBackgroundColor(
                 Color.TRANSPARENT
+        );
+
+        View outerGlow =
+                new View(context);
+        outerGlow.setBackground(
+                edgeStroke(
+                        Color.argb(
+                                24,
+                                54,
+                                220,
+                                104
+                        ),
+                        10,
+                        28
+                )
+        );
+        outerGlow.setClickable(false);
+
+        FrameLayout.LayoutParams outerGlowLp =
+                new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                );
+        outerGlowLp.setMargins(
+                dp(1),
+                dp(1),
+                dp(1),
+                dp(1)
+        );
+        root.addView(
+                outerGlow,
+                outerGlowLp
+        );
+
+        View middleGlow =
+                new View(context);
+        middleGlow.setBackground(
+                edgeStroke(
+                        Color.argb(
+                                52,
+                                54,
+                                220,
+                                104
+                        ),
+                        5,
+                        25
+                )
+        );
+        middleGlow.setClickable(false);
+
+        FrameLayout.LayoutParams middleGlowLp =
+                new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                );
+        middleGlowLp.setMargins(
+                dp(3),
+                dp(3),
+                dp(3),
+                dp(3)
+        );
+        root.addView(
+                middleGlow,
+                middleGlowLp
+        );
+
+        View innerGlow =
+                new View(context);
+        innerGlow.setBackground(
+                edgeStroke(
+                        Color.argb(
+                                145,
+                                54,
+                                220,
+                                104
+                        ),
+                        1,
+                        22
+                )
+        );
+        innerGlow.setClickable(false);
+
+        FrameLayout.LayoutParams innerGlowLp =
+                new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                );
+        innerGlowLp.setMargins(
+                dp(7),
+                dp(7),
+                dp(7),
+                dp(7)
+        );
+        root.addView(
+                innerGlow,
+                innerGlowLp
         );
 
         LinearLayout panel =
@@ -193,16 +288,26 @@ final class MaatjeVoiceInteractionSession
                 )
         );
 
-        Button close =
-                new Button(context);
+        TextView close =
+                new TextView(context);
 
-        close.setAllCaps(false);
         close.setText("×");
-        close.setTextSize(24);
+        close.setTextSize(25);
         close.setTextColor(MUTED);
+        close.setGravity(
+                Gravity.CENTER
+        );
+        close.setIncludeFontPadding(false);
+        close.setPadding(
+                0,
+                0,
+                0,
+                0
+        );
         close.setBackgroundColor(
                 Color.TRANSPARENT
         );
+        close.setClickable(true);
 
         close.setOnClickListener(
                 v -> finishOverlay()
@@ -362,7 +467,7 @@ final class MaatjeVoiceInteractionSession
         sessionVisible = true;
 
         MaatjeVoiceInteractionService
-                .setSessionVisible(true);
+                .claimMicrophoneForSession();
 
         configureWindow();
 
@@ -370,7 +475,7 @@ final class MaatjeVoiceInteractionSession
 
         mainHandler.postDelayed(
                 this::startListening,
-                260L
+                380L
         );
     }
 
@@ -379,6 +484,7 @@ final class MaatjeVoiceInteractionSession
         sessionVisible = false;
 
         stopListening();
+        destroySpeechRecognizer();
         stopPlayer();
 
         MaatjeVoiceInteractionService
@@ -404,13 +510,7 @@ final class MaatjeVoiceInteractionSession
         stopListening();
         stopPlayer();
 
-        if (speechRecognizer != null) {
-            try {
-                speechRecognizer.destroy();
-            } catch (Exception ignored) {}
-
-            speechRecognizer = null;
-        }
+        destroySpeechRecognizer();
 
         chatExecutor.shutdownNow();
         voiceExecutor.shutdownNow();
@@ -454,14 +554,14 @@ final class MaatjeVoiceInteractionSession
             );
 
             window.setGravity(
-                    Gravity.BOTTOM
+                    Gravity.FILL
             );
 
             window.setLayout(
                     WindowManager.LayoutParams
                             .MATCH_PARENT,
                     WindowManager.LayoutParams
-                            .WRAP_CONTENT
+                            .MATCH_PARENT
             );
 
         } catch (Exception ignored) {}
@@ -507,20 +607,13 @@ final class MaatjeVoiceInteractionSession
             return;
         }
 
-        ComponentName backend =
-                findExternalRecognizer();
+        destroySpeechRecognizer();
 
         try {
             speechRecognizer =
-                    backend == null
-                            ? SpeechRecognizer
+                    SpeechRecognizer
                             .createSpeechRecognizer(
                                     context
-                            )
-                            : SpeechRecognizer
-                            .createSpeechRecognizer(
-                                    context,
-                                    backend
                             );
 
             speechRecognizer
@@ -534,6 +627,12 @@ final class MaatjeVoiceInteractionSession
                                     setStatus(
                                             "LISTENING"
                                     );
+
+                                    if (footerText != null) {
+                                        footerText.setText(
+                                                "MIC • READY"
+                                        );
+                                    }
                                 }
 
                                 @Override
@@ -572,13 +671,64 @@ final class MaatjeVoiceInteractionSession
                                         return;
                                     }
 
+                                    String errorName =
+                                            speechErrorName(
+                                                    error
+                                            );
+
+                                    if (footerText != null) {
+                                        footerText.setText(
+                                                "MIC • "
+                                                        + errorName
+                                                        + " ("
+                                                        + error
+                                                        + ")"
+                                        );
+                                    }
+
+                                    boolean retryable =
+                                            error
+                                                    == SpeechRecognizer.ERROR_AUDIO
+                                                    || error
+                                                    == SpeechRecognizer.ERROR_CLIENT
+                                                    || error
+                                                    == SpeechRecognizer.ERROR_RECOGNIZER_BUSY;
+
+                                    if (retryable
+                                            && speechRetryCount < 1) {
+                                        speechRetryCount++;
+
+                                        setStatus(
+                                                "MIC • RETRYING"
+                                        );
+
+                                        if (queryText != null) {
+                                            queryText.setText(
+                                                    "Microfoon opnieuw overnemen..."
+                                            );
+                                        }
+
+                                        destroySpeechRecognizer();
+
+                                        mainHandler.postDelayed(
+                                                MaatjeVoiceInteractionSession.this
+                                                        ::startListeningInternal,
+                                                420L
+                                        );
+                                        return;
+                                    }
+
                                     setStatus(
                                             "TAP MIC TO RETRY"
                                     );
 
                                     if (queryText != null) {
                                         queryText.setText(
-                                                "Ik verstond je niet."
+                                                error
+                                                        == SpeechRecognizer.ERROR_NO_MATCH
+                                                        ? "Ik verstond je niet."
+                                                        : "Spraakfout: "
+                                                        + errorName
                                         );
                                     }
 
@@ -590,6 +740,7 @@ final class MaatjeVoiceInteractionSession
                                         Bundle results
                                 ) {
                                     listening = false;
+                                    speechRetryCount = 0;
 
                                     ArrayList<String> list =
                                             results
@@ -719,15 +870,46 @@ final class MaatjeVoiceInteractionSession
     }
 
     private void startListening() {
+        speechRetryCount = 0;
+        startListeningInternal();
+    }
+
+    private void startListeningInternal() {
         if (!sessionVisible
                 || thinking
                 || speaking) {
             return;
         }
 
-        if (speechRecognizer == null) {
-            createSpeechRecognizer();
+        if (context.checkSelfPermission(
+                android.Manifest.permission.RECORD_AUDIO
+        ) != PackageManager.PERMISSION_GRANTED) {
+            setStatus(
+                    "MIC • PERMISSION"
+            );
+
+            if (queryText != null) {
+                queryText.setText(
+                        "Microfoontoegang ontbreekt voor MAATJE."
+                );
+            }
+
+            if (footerText != null) {
+                footerText.setText(
+                        "MIC • PERMISSION DENIED"
+                );
+            }
+
+            setMicEnabled(true);
+            return;
         }
+
+        MaatjeVoiceInteractionService
+                .claimMicrophoneForSession();
+
+        stopListening();
+        destroySpeechRecognizer();
+        createSpeechRecognizer();
 
         if (speechRecognizer == null) {
             setStatus(
@@ -740,10 +922,15 @@ final class MaatjeVoiceInteractionSession
                 );
             }
 
+            if (footerText != null) {
+                footerText.setText(
+                        "MIC • NO RECOGNIZER"
+                );
+            }
+
+            setMicEnabled(true);
             return;
         }
-
-        stopListening();
 
         if (queryText != null) {
             queryText.setText(
@@ -837,6 +1024,57 @@ final class MaatjeVoiceInteractionSession
         }
 
         setMicEnabled(true);
+    }
+
+    private void destroySpeechRecognizer() {
+        if (speechRecognizer != null) {
+            try {
+                speechRecognizer.cancel();
+            } catch (Exception ignored) {}
+
+            try {
+                speechRecognizer.destroy();
+            } catch (Exception ignored) {}
+
+            speechRecognizer = null;
+        }
+
+        listening = false;
+    }
+
+    private String speechErrorName(
+            int error
+    ) {
+        switch (error) {
+            case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
+                return "NETWORK TIMEOUT";
+            case SpeechRecognizer.ERROR_NETWORK:
+                return "NETWORK";
+            case SpeechRecognizer.ERROR_AUDIO:
+                return "AUDIO";
+            case SpeechRecognizer.ERROR_SERVER:
+                return "SERVER";
+            case SpeechRecognizer.ERROR_CLIENT:
+                return "CLIENT";
+            case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
+                return "SPEECH TIMEOUT";
+            case SpeechRecognizer.ERROR_NO_MATCH:
+                return "NO MATCH";
+            case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:
+                return "RECOGNIZER BUSY";
+            case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
+                return "PERMISSION";
+            case SpeechRecognizer.ERROR_TOO_MANY_REQUESTS:
+                return "TOO MANY REQUESTS";
+            case SpeechRecognizer.ERROR_SERVER_DISCONNECTED:
+                return "SERVER DISCONNECTED";
+            case SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED:
+                return "LANGUAGE NOT SUPPORTED";
+            case SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE:
+                return "LANGUAGE UNAVAILABLE";
+            default:
+                return "ERROR " + error;
+        }
     }
 
     private void handleQuery(
@@ -1431,6 +1669,30 @@ final class MaatjeVoiceInteractionSession
                         .getDisplayMetrics()
                         .density
         );
+    }
+
+    private GradientDrawable edgeStroke(
+            int color,
+            int widthDp,
+            int radiusDp
+    ) {
+        GradientDrawable drawable =
+                new GradientDrawable();
+
+        drawable.setColor(
+                Color.TRANSPARENT
+        );
+
+        drawable.setCornerRadius(
+                dp(radiusDp)
+        );
+
+        drawable.setStroke(
+                dp(widthDp),
+                color
+        );
+
+        return drawable;
     }
 
     private GradientDrawable roundRect(

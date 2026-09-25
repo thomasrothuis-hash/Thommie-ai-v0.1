@@ -114,6 +114,19 @@ public class MaatjeVoiceInteractionService
         refreshInstance();
     }
 
+    static void claimMicrophoneForSession() {
+        sessionVisible = true;
+
+        MaatjeVoiceInteractionService
+                service = instance;
+
+        if (service != null
+                && service.backgroundWakeWord != null) {
+            service.backgroundWakeWord
+                    .stopAndWait(1000L);
+        }
+    }
+
     static void refreshFromActivity() {
         refreshInstance();
     }
@@ -171,7 +184,11 @@ public class MaatjeVoiceInteractionService
         }
 
         sessionVisible = true;
-        stopWake();
+
+        if (backgroundWakeWord != null) {
+            backgroundWakeWord
+                    .stopAndWait(1000L);
+        }
 
         Bundle args =
                 new Bundle();

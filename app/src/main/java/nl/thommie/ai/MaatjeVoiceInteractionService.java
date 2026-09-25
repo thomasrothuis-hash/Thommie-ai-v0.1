@@ -203,6 +203,8 @@ public class MaatjeVoiceInteractionService
                     args,
                     VoiceInteractionSession
                             .SHOW_WITH_ASSIST
+                            | VoiceInteractionSession
+                            .SHOW_WITH_SCREENSHOT
             );
 
         } catch (Exception ignored) {

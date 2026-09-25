@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
@@ -20,6 +21,7 @@ import android.speech.RecognitionListener;
 import android.speech.RecognitionService;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
+import android.util.Base64;
 import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
@@ -29,6 +31,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -66,6 +69,7 @@ final class MaatjeVoiceInteractionSession
 
     private SpeechRecognizer speechRecognizer;
     private MediaPlayer mediaPlayer;
+    private Bitmap latestScreenshot;
 
     private TextView statusText;
     private TextView queryText;
@@ -455,6 +459,37 @@ final class MaatjeVoiceInteractionSession
     }
 
     @Override
+    public void onHandleScreenshot(
+            Bitmap screenshot
+    ) {
+        super.onHandleScreenshot(screenshot);
+
+        clearLatestScreenshot();
+
+        if (screenshot == null) {
+            return;
+        }
+
+        try {
+            Bitmap.Config config =
+                    screenshot.getConfig();
+
+            if (config == null
+                    || config == Bitmap.Config.HARDWARE) {
+                config = Bitmap.Config.ARGB_8888;
+            }
+
+            latestScreenshot =
+                    screenshot.copy(
+                            config,
+                            false
+                    );
+        } catch (Exception ignored) {
+            latestScreenshot = null;
+        }
+    }
+
+    @Override
     public void onShow(
             Bundle args,
             int showFlags
@@ -486,6 +521,7 @@ final class MaatjeVoiceInteractionSession
         stopListening();
         destroySpeechRecognizer();
         stopPlayer();
+        clearLatestScreenshot();
 
         MaatjeVoiceInteractionService
                 .setSessionVisible(false);
@@ -509,6 +545,7 @@ final class MaatjeVoiceInteractionSession
 
         stopListening();
         stopPlayer();
+        clearLatestScreenshot();
 
         destroySpeechRecognizer();
 
@@ -1093,6 +1130,11 @@ final class MaatjeVoiceInteractionSession
                         Locale.ROOT
                 );
 
+        boolean screenVisionQuery =
+                isScreenVisionQuery(
+                        normalized
+                );
+
         if (normalized.equals("stop")
                 || normalized.contains(
                 "maatje stop"
@@ -1176,19 +1218,38 @@ final class MaatjeVoiceInteractionSession
             return;
         }
 
+        final Bitmap screenshotForRequest =
+                screenVisionQuery
+                        ? copyLatestScreenshot()
+                        : null;
+
+        if (screenVisionQuery
+                && screenshotForRequest == null) {
+            showLocalAnswer(
+                    "Ik krijg van Android geen screenshot van dit scherm. Deze app of een privacy-instelling kan schermopnames blokkeren."
+            );
+            return;
+        }
+
         thinking = true;
         setMicEnabled(false);
 
-        setStatus(
-                InternetSettings
-                        .enabled(context)
-                        ? "THINKING • WEB AUTO"
-                        : "THINKING"
-        );
+        if (screenVisionQuery) {
+            setStatus("LOOKING AT SCREEN");
+        } else {
+            setStatus(
+                    InternetSettings
+                            .enabled(context)
+                            ? "THINKING • WEB AUTO"
+                            : "THINKING"
+            );
+        }
 
         if (answerText != null) {
             answerText.setText(
-                    "Even denken..."
+                    screenVisionQuery
+                            ? "Even kijken..."
+                            : "Even denken..."
             );
         }
 
@@ -1214,25 +1275,57 @@ final class MaatjeVoiceInteractionSession
                             );
                 }
 
-                OpenAiClient.Reply reply =
-                        OpenAiClient.ask(
-                                key,
-                                "gpt-5.6-luna",
-                                conversationId,
-                                query,
-                                MemoryStore
-                                        .getProfile(
-                                                context
-                                        ),
-                                PersonalitySettings
-                                        .prompt(
-                                                context
-                                        ),
-                                InternetSettings
-                                        .enabled(
-                                                context
-                                        )
-                        );
+                String screenshotDataUrl =
+                        screenVisionQuery
+                                ? encodeScreenshot(
+                                        screenshotForRequest
+                                )
+                                : null;
+
+                OpenAiClient.Reply reply;
+
+                if (screenVisionQuery) {
+                    reply =
+                            OpenAiClient.askWithImage(
+                                    key,
+                                    "gpt-5.6-luna",
+                                    conversationId,
+                                    query,
+                                    screenshotDataUrl,
+                                    MemoryStore
+                                            .getProfile(
+                                                    context
+                                            ),
+                                    PersonalitySettings
+                                            .prompt(
+                                                    context
+                                            ),
+                                    InternetSettings
+                                            .enabled(
+                                                    context
+                                            )
+                            );
+                } else {
+                    reply =
+                            OpenAiClient.ask(
+                                    key,
+                                    "gpt-5.6-luna",
+                                    conversationId,
+                                    query,
+                                    MemoryStore
+                                            .getProfile(
+                                                    context
+                                            ),
+                                    PersonalitySettings
+                                            .prompt(
+                                                    context
+                                            ),
+                                    InternetSettings
+                                            .enabled(
+                                                    context
+                                            )
+                            );
+                }
 
                 UsageTracker.record(
                         context,
@@ -1255,18 +1348,21 @@ final class MaatjeVoiceInteractionSession
                     }
 
                     if (footerText != null) {
-                        footerText.setText(
-                                reply.webUsed
-                                        ? UsageTracker
+                        String footer =
+                                UsageTracker
                                         .compactLine(
                                                 context
-                                        )
-                                        + " • WEB"
-                                        : UsageTracker
-                                        .compactLine(
-                                                context
-                                        )
-                        );
+                                        );
+
+                        if (screenVisionQuery) {
+                            footer += " • VISION";
+                        }
+
+                        if (reply.webUsed) {
+                            footer += " • WEB";
+                        }
+
+                        footerText.setText(footer);
                     }
 
                     speakOrFinish(
@@ -1296,8 +1392,126 @@ final class MaatjeVoiceInteractionSession
 
                     setMicEnabled(true);
                 });
+            } finally {
+                if (screenshotForRequest != null
+                        && !screenshotForRequest.isRecycled()) {
+                    screenshotForRequest.recycle();
+                }
             }
         });
+    }
+
+    private boolean isScreenVisionQuery(
+            String normalized
+    ) {
+        if (normalized == null
+                || normalized.trim().isEmpty()) {
+            return false;
+        }
+
+        String value = normalized.trim();
+
+        if (!value.contains("scherm")
+                && !value.contains("screen")) {
+            return false;
+        }
+
+        return value.contains("wat zie")
+                || value.contains("zie je")
+                || value.contains("kan je zien")
+                || value.contains("kun je zien")
+                || value.contains("wat staat")
+                || value.contains("wat heb ik")
+                || value.contains("kijk naar")
+                || value.contains("bekijk")
+                || value.contains("lees")
+                || value.contains("wat is dit");
+    }
+
+    private Bitmap copyLatestScreenshot() {
+        Bitmap screenshot = latestScreenshot;
+
+        if (screenshot == null
+                || screenshot.isRecycled()) {
+            return null;
+        }
+
+        try {
+            Bitmap.Config config =
+                    screenshot.getConfig();
+
+            if (config == null
+                    || config == Bitmap.Config.HARDWARE) {
+                config = Bitmap.Config.ARGB_8888;
+            }
+
+            return screenshot.copy(
+                    config,
+                    false
+            );
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String encodeScreenshot(
+            Bitmap screenshot
+    ) throws Exception {
+        if (screenshot == null
+                || screenshot.isRecycled()) {
+            throw new Exception(
+                    "Schermbeeld is niet meer beschikbaar."
+            );
+        }
+
+        Bitmap working = screenshot;
+        int width = screenshot.getWidth();
+        int height = screenshot.getHeight();
+        int maxEdge = Math.max(width, height);
+
+        if (maxEdge > 2400) {
+            float scale = 2400f / maxEdge;
+            working = Bitmap.createScaledBitmap(
+                    screenshot,
+                    Math.max(1, Math.round(width * scale)),
+                    Math.max(1, Math.round(height * scale)),
+                    true
+            );
+        }
+
+        try (ByteArrayOutputStream output =
+                     new ByteArrayOutputStream()) {
+            if (!working.compress(
+                    Bitmap.CompressFormat.JPEG,
+                    82,
+                    output
+            )) {
+                throw new Exception(
+                        "Schermbeeld kon niet worden gecomprimeerd."
+                );
+            }
+
+            return "data:image/jpeg;base64,"
+                    + Base64.encodeToString(
+                            output.toByteArray(),
+                            Base64.NO_WRAP
+                    );
+        } finally {
+            if (working != screenshot
+                    && !working.isRecycled()) {
+                working.recycle();
+            }
+        }
+    }
+
+    private void clearLatestScreenshot() {
+        Bitmap screenshot = latestScreenshot;
+        latestScreenshot = null;
+
+        if (screenshot != null
+                && !screenshot.isRecycled()) {
+            screenshot.recycle();
+        }
     }
 
     private void showLocalAnswer(

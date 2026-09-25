@@ -85,7 +85,7 @@ final class AssistantSettings {
 
         new AlertDialog.Builder(activity)
                 .setTitle(
-                        "MAATJE v0.9.4.1 – Standaard assistent"
+                        "MAATJE v0.9.5 – Standaard assistent"
                 )
                 .setMessage(message)
                 .setPositiveButton(

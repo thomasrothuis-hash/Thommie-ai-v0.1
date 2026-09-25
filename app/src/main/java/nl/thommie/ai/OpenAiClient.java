@@ -70,7 +70,7 @@ final class OpenAiClient {
         JSONObject body = new JSONObject();
         JSONObject metadata = new JSONObject();
         metadata.put("app", "MAATJE");
-        metadata.put("version", "0.9.4.1");
+        metadata.put("version", "0.9.5");
         body.put("metadata", metadata);
 
         writeJson(conn, body);
@@ -108,13 +108,82 @@ final class OpenAiClient {
             String personalityPrompt,
             boolean webSearchEnabled
     ) throws Exception {
+        return askInternal(
+                apiKey,
+                model,
+                conversationId,
+                input,
+                null,
+                profileMemory,
+                personalityPrompt,
+                webSearchEnabled
+        );
+    }
+
+    static Reply askWithImage(
+            String apiKey,
+            String model,
+            String conversationId,
+            String input,
+            String imageDataUrl,
+            String profileMemory,
+            String personalityPrompt,
+            boolean webSearchEnabled
+    ) throws Exception {
+        return askInternal(
+                apiKey,
+                model,
+                conversationId,
+                input,
+                imageDataUrl,
+                profileMemory,
+                personalityPrompt,
+                webSearchEnabled
+        );
+    }
+
+    private static Reply askInternal(
+            String apiKey,
+            String model,
+            String conversationId,
+            String input,
+            String imageDataUrl,
+            String profileMemory,
+            String personalityPrompt,
+            boolean webSearchEnabled
+    ) throws Exception {
 
         URL url = new URL("https://api.openai.com/v1/responses");
         HttpURLConnection conn = open(url, apiKey);
 
         JSONObject body = new JSONObject();
         body.put("model", model);
-        body.put("input", input);
+
+        if (imageDataUrl == null
+                || imageDataUrl.trim().isEmpty()) {
+            body.put("input", input);
+        } else {
+            JSONArray requestInput = new JSONArray();
+            JSONObject message = new JSONObject();
+            message.put("role", "user");
+
+            JSONArray content = new JSONArray();
+            content.put(
+                    new JSONObject()
+                            .put("type", "input_text")
+                            .put("text", input)
+            );
+            content.put(
+                    new JSONObject()
+                            .put("type", "input_image")
+                            .put("image_url", imageDataUrl)
+                            .put("detail", "high")
+            );
+
+            message.put("content", content);
+            requestInput.put(message);
+            body.put("input", requestInput);
+        }
 
         if (conversationId != null && !conversationId.isEmpty()) {
             body.put("conversation", conversationId);
@@ -143,6 +212,14 @@ final class OpenAiClient {
                 + "tenzij de Android-app het commando lokaal heeft afgehandeld voordat deze request werd verstuurd. "
                 + "Als een wijzigingsverzoek toch bij jou terechtkomt, zeg kort dat het lokale commando niet herkend is "
                 + "in plaats van te doen alsof de instelling gewijzigd is.";
+
+        if (imageDataUrl != null
+                && !imageDataUrl.trim().isEmpty()) {
+            instructions +=
+                    " Je ontvangt bij deze vraag één screenshot van het scherm dat zichtbaar was toen MAATJE werd geopend. "
+                    + "Gebruik daadwerkelijk de zichtbare inhoud van die screenshot om de vraag te beantwoorden. "
+                    + "Noem onzekerheid als tekst of details niet goed leesbaar zijn en verzin geen elementen die niet zichtbaar zijn.";
+        }
 
         if (webSearchEnabled) {
             instructions +=

@@ -1,6 +1,15 @@
-# MAATJE v0.9.4.1
+# MAATJE v0.9.5
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## v0.9.5 features
+
+- Adds screen-aware vision to the native assistant overlay.
+- Saying phrases such as “wat zie je op mijn scherm?” sends one Android assistant screenshot with the spoken question.
+- Normal questions remain text-only; screenshots are not streamed continuously.
+- Screen images are resized to at most 2400 px on the longest edge and sent as JPEG vision input.
+- The overlay shows LOOKING AT SCREEN / VISION while a screenshot is being analyzed.
+- Secure or policy-blocked screens fail clearly instead of silently hallucinating screen content.
 
 ## v0.9.4.1 fixes
 
@@ -126,4 +135,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v0.9.4.1.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v0.9.5.apk` as a workflow artifact.

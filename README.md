@@ -1,4 +1,4 @@
-# MAATJE v1.3.1 OnePlus Edition + MAATJE Kiosk v1.0.3
+# MAATJE v1.3.2 OnePlus Edition + MAATJE Kiosk v1.0.3
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
 

@@ -65,7 +65,7 @@ final class InternetSettings {
 
         new AlertDialog.Builder(activity)
                 .setTitle(
-                        "MAATJE v1.0.0 – Internet"
+                        "MAATJE v1.1.0 – Internet"
                 )
                 .setSingleChoiceItems(
                         options,

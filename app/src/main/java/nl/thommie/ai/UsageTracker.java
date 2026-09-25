@@ -222,7 +222,7 @@ final class UsageTracker {
                                         sessionOutput
                                 )
                         )
-                        + "\n\nSINDS v1.0.0 TRACKING / INSTALLATIE\n"
+                        + "\n\nSINDS v1.1.0 TRACKING / INSTALLATIE\n"
                         + "Input: "
                         + format(lifetimeInput)
                         + "\nOutput: "
@@ -242,7 +242,7 @@ final class UsageTracker {
 
         new AlertDialog.Builder(activity)
                 .setTitle(
-                        "MAATJE v1.0.0 – Gebruik & tokens"
+                        "MAATJE v1.1.0 – Gebruik & tokens"
                 )
                 .setMessage(message)
                 .setPositiveButton(

@@ -1,6 +1,19 @@
-# MAATJE v1.0.0
+# MAATJE v1.1.0
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## v1.1.0 realtime voice
+
+- Adds true speech-to-speech conversation mode using OpenAI Realtime over a persistent WebSocket session.
+- Streams microphone PCM16 audio at 24 kHz directly to gpt-realtime-2.1 and plays returned PCM audio immediately through AudioTrack.
+- Uses server VAD with fast end-of-turn timing and interruption support, so MAATJE can be interrupted while speaking.
+- Keeps the realtime session open for natural multi-turn conversation instead of closing after every answer.
+- Adds a real PCM-driven 29-bar waveform to the assistant overlay: green for the user and brighter green for MAATJE.
+- Shows live user and assistant transcripts while the realtime audio conversation continues.
+- Keeps screen vision: screen questions cancel the initial voice response, inject the captured screenshot into the realtime conversation, and answer by voice.
+- Keeps local Android commands and memory commands by intercepting the completed transcript; realtime automatically falls back to the v1.0 speech path if startup fails.
+- Routes realtime audio through the built-in speaker and restores the previous communication audio route when the overlay closes.
+- Uses gpt-transcribe for live input captions and minimal realtime reasoning effort for low latency.
 
 ## v1.0.0 speed update
 
@@ -153,4 +166,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v1.0.0.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v1.1.0.apk` as a workflow artifact.

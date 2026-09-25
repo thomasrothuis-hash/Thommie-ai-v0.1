@@ -70,7 +70,9 @@ final class MaatjeVoiceInteractionSession
     private SpeechRecognizer speechRecognizer;
     private MediaPlayer mediaPlayer;
     private Bitmap latestScreenshot;
+    private RealtimeVoiceClient realtimeVoiceClient;
 
+    private AudioWaveformView waveformView;
     private TextView statusText;
     private TextView queryText;
     private TextView answerText;
@@ -81,6 +83,8 @@ final class MaatjeVoiceInteractionSession
     private boolean thinking = false;
     private boolean speaking = false;
     private boolean sessionVisible = false;
+    private boolean realtimeConnected = false;
+    private boolean realtimeFallbackStarted = false;
     private int speechRetryCount = 0;
 
     MaatjeVoiceInteractionSession(
@@ -281,7 +285,12 @@ final class MaatjeVoiceInteractionSession
         );
 
         micButton.setOnClickListener(
-                v -> startListening()
+                v -> {
+                    if (realtimeVoiceClient == null
+                            || !realtimeVoiceClient.isRunning()) {
+                        startRealtimeVoice();
+                    }
+                }
         );
 
         header.addView(
@@ -365,6 +374,23 @@ final class MaatjeVoiceInteractionSession
         );
 
         panel.addView(statusText);
+
+        waveformView =
+                new AudioWaveformView(context);
+        waveformView.setMode(
+                AudioWaveformView.MODE_IDLE
+        );
+
+        LinearLayout.LayoutParams waveformLp =
+                new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        dp(46)
+                );
+        waveformLp.bottomMargin = dp(7);
+        panel.addView(
+                waveformView,
+                waveformLp
+        );
 
         queryText =
                 new TextView(context);
@@ -509,8 +535,8 @@ final class MaatjeVoiceInteractionSession
         resetUi();
 
         mainHandler.postDelayed(
-                this::startListening,
-                300L
+                this::startRealtimeVoice,
+                220L
         );
     }
 
@@ -518,6 +544,7 @@ final class MaatjeVoiceInteractionSession
     public void onHide() {
         sessionVisible = false;
 
+        stopRealtimeVoice();
         stopListening();
         destroySpeechRecognizer();
         stopPlayer();
@@ -543,6 +570,7 @@ final class MaatjeVoiceInteractionSession
                         null
                 );
 
+        stopRealtimeVoice();
         stopListening();
         stopPlayer();
         clearLatestScreenshot();
@@ -608,6 +636,8 @@ final class MaatjeVoiceInteractionSession
         thinking = false;
         speaking = false;
         listening = false;
+        realtimeConnected = false;
+        realtimeFallbackStarted = false;
 
         if (statusText != null) {
             statusText.setText(
@@ -633,7 +663,632 @@ final class MaatjeVoiceInteractionSession
             );
         }
 
+        if (waveformView != null) {
+            waveformView.setMode(
+                    AudioWaveformView.MODE_IDLE
+            );
+        }
+
         setMicEnabled(true);
+    }
+
+    private void startRealtimeVoice() {
+        if (!sessionVisible) {
+            return;
+        }
+
+        if (context.checkSelfPermission(
+                android.Manifest.permission.RECORD_AUDIO
+        ) != PackageManager.PERMISSION_GRANTED) {
+            setStatus("MIC • PERMISSION");
+
+            if (queryText != null) {
+                queryText.setText(
+                        "Microfoontoegang ontbreekt voor MAATJE."
+                );
+            }
+
+            setMicEnabled(true);
+            return;
+        }
+
+        String key =
+                SecurePrefs.loadApiKey(context);
+
+        if (key.isEmpty()) {
+            showLocalAnswer(
+                    "Open de gewone MAATJE-app één keer en vul daar je API-key in."
+            );
+            return;
+        }
+
+        stopListening();
+        destroySpeechRecognizer();
+        stopPlayer();
+        stopRealtimeVoice();
+
+        realtimeFallbackStarted = false;
+        realtimeConnected = false;
+        listening = false;
+        speaking = false;
+        thinking = false;
+
+        setStatus("CONNECTING • REALTIME");
+
+        if (queryText != null) {
+            queryText.setText(
+                    "Realtime verbinding opzetten..."
+            );
+        }
+
+        if (answerText != null) {
+            answerText.setText("");
+        }
+
+        if (footerText != null) {
+            footerText.setText(
+                    "GPT-REALTIME-2.1 • CONNECTING"
+            );
+        }
+
+        if (waveformView != null) {
+            waveformView.setMode(
+                    AudioWaveformView.MODE_IDLE
+            );
+        }
+
+        setMicEnabled(false);
+
+        realtimeVoiceClient =
+                new RealtimeVoiceClient(
+                        context,
+                        new RealtimeVoiceClient.Listener() {
+                            @Override
+                            public void onConnected() {
+                                mainHandler.post(() -> {
+                                    if (!sessionVisible) {
+                                        return;
+                                    }
+
+                                    realtimeConnected = true;
+                                    realtimeFallbackStarted = false;
+                                    setStatus(
+                                            "LISTENING • REALTIME"
+                                    );
+
+                                    if (queryText != null) {
+                                        queryText.setText(
+                                                "Praat maar..."
+                                        );
+                                    }
+
+                                    if (footerText != null) {
+                                        footerText.setText(
+                                                "GPT-REALTIME-2.1 • LIVE"
+                                        );
+                                    }
+
+                                    if (waveformView != null) {
+                                        waveformView.setMode(
+                                                AudioWaveformView.MODE_IDLE
+                                        );
+                                    }
+
+                                    setMicEnabled(false);
+                                });
+                            }
+
+                            @Override
+                            public void onDisconnected() {
+                                mainHandler.post(() -> {
+                                    realtimeConnected = false;
+
+                                    if (!sessionVisible) {
+                                        return;
+                                    }
+
+                                    setStatus(
+                                            "REALTIME • DISCONNECTED"
+                                    );
+                                    setMicEnabled(true);
+                                });
+                            }
+
+                            @Override
+                            public void onError(
+                                    String message
+                            ) {
+                                mainHandler.post(() -> {
+                                    if (!sessionVisible) {
+                                        return;
+                                    }
+
+                                    if (!realtimeConnected
+                                            && !realtimeFallbackStarted) {
+                                        realtimeFallbackStarted = true;
+
+                                        if (footerText != null) {
+                                            footerText.setText(
+                                                    "REALTIME FAILED • FALLBACK"
+                                            );
+                                        }
+
+                                        stopRealtimeVoice();
+
+                                        mainHandler.postDelayed(
+                                                MaatjeVoiceInteractionSession.this
+                                                        ::startListening,
+                                                220L
+                                        );
+                                        return;
+                                    }
+
+                                    setStatus(
+                                            "REALTIME • ERROR"
+                                    );
+
+                                    if (footerText != null) {
+                                        footerText.setText(
+                                                message == null
+                                                        ? "REALTIME API ERROR"
+                                                        : message
+                                        );
+                                    }
+                                });
+                            }
+
+                            @Override
+                            public void onUserSpeechStarted() {
+                                mainHandler.post(() -> {
+                                    if (!sessionVisible) {
+                                        return;
+                                    }
+
+                                    listening = true;
+                                    speaking = false;
+                                    thinking = false;
+
+                                    setStatus(
+                                            "LISTENING • LIVE"
+                                    );
+
+                                    if (waveformView != null) {
+                                        waveformView.setMode(
+                                                AudioWaveformView.MODE_USER
+                                        );
+                                    }
+                                });
+                            }
+
+                            @Override
+                            public void onUserSpeechStopped() {
+                                mainHandler.post(() -> {
+                                    if (!sessionVisible) {
+                                        return;
+                                    }
+
+                                    listening = false;
+                                    thinking = true;
+
+                                    setStatus(
+                                            "RESPONDING • LIVE"
+                                    );
+
+                                    if (waveformView != null) {
+                                        waveformView.setMode(
+                                                AudioWaveformView.MODE_IDLE
+                                        );
+                                    }
+                                });
+                            }
+
+                            @Override
+                            public void onUserTranscript(
+                                    String text,
+                                    boolean complete
+                            ) {
+                                mainHandler.post(() -> {
+                                    if (!sessionVisible) {
+                                        return;
+                                    }
+
+                                    if (queryText != null
+                                            && text != null
+                                            && !text.trim().isEmpty()) {
+                                        queryText.setText(
+                                                "JIJ • "
+                                                        + text.trim()
+                                        );
+                                    }
+
+                                    if (complete
+                                            && text != null
+                                            && !text.trim().isEmpty()) {
+                                        handleRealtimeTranscript(
+                                                text.trim()
+                                        );
+                                    }
+                                });
+                            }
+
+                            @Override
+                            public void onAssistantTranscript(
+                                    String text,
+                                    boolean complete
+                            ) {
+                                mainHandler.post(() -> {
+                                    if (!sessionVisible
+                                            || text == null) {
+                                        return;
+                                    }
+
+                                    String cleaned =
+                                            cleanAssistantText(
+                                                    text
+                                            );
+
+                                    if (!cleaned.isEmpty()
+                                            && answerText != null) {
+                                        answerText.setText(
+                                                cleaned
+                                        );
+                                    }
+                                });
+                            }
+
+                            @Override
+                            public void onAssistantSpeaking(
+                                    boolean active
+                            ) {
+                                mainHandler.post(() -> {
+                                    if (!sessionVisible) {
+                                        return;
+                                    }
+
+                                    speaking = active;
+                                    thinking = false;
+
+                                    if (active) {
+                                        setStatus(
+                                                "SPEAKING • REALTIME"
+                                        );
+
+                                        if (waveformView != null) {
+                                            waveformView.setMode(
+                                                    AudioWaveformView
+                                                            .MODE_ASSISTANT
+                                            );
+                                        }
+                                    } else {
+                                        setStatus(
+                                                "LISTENING • REALTIME"
+                                        );
+
+                                        if (waveformView != null) {
+                                            waveformView.setMode(
+                                                    AudioWaveformView
+                                                            .MODE_IDLE
+                                            );
+                                        }
+                                    }
+                                });
+                            }
+
+                            @Override
+                            public void onMicPcm(
+                                    short[] samples,
+                                    int length
+                            ) {
+                                AudioWaveformView view =
+                                        waveformView;
+
+                                if (view != null
+                                        && listening) {
+                                    view.pushPcm16(
+                                            samples,
+                                            length
+                                    );
+                                }
+                            }
+
+                            @Override
+                            public void onAssistantPcm(
+                                    byte[] pcm
+                            ) {
+                                AudioWaveformView view =
+                                        waveformView;
+
+                                if (view != null) {
+                                    view.pushPcm16(pcm);
+                                }
+                            }
+                        }
+                );
+
+        realtimeVoiceClient.start(
+                key,
+                buildRealtimeInstructions(),
+                VoiceSettings.voice(context)
+        );
+    }
+
+    private String buildRealtimeInstructions() {
+        StringBuilder prompt =
+                new StringBuilder();
+
+        prompt.append(
+                "Je bent MAATJE, de persoonlijke realtime spraakassistent van de gebruiker. "
+        );
+        prompt.append(
+                "Praat standaard Nederlands. Reageer snel, natuurlijk, direct en menselijk. "
+        );
+        prompt.append(
+                "Gewone antwoorden zijn meestal 1 tot 3 korte zinnen. Ga alleen uitgebreid als de gebruiker daarom vraagt. "
+        );
+        prompt.append(
+                "Gebruik een kalme, zelfverzekerde, vrouwelijke assistentstijl. Geen klantenservice-toon en geen overdreven enthousiasme. "
+        );
+        prompt.append(
+                "De gebruiker mag je onderbreken; stop dan meteen en luister naar de nieuwe vraag. "
+        );
+        prompt.append(
+                "Bij een vraag over wat er op het scherm staat, zeg hooguit kort dat je kijkt; de app stuurt daarna automatisch de screenshot. "
+        );
+        prompt.append(
+                "Bij lokale telefooncommando's kan de Android-app de actie zelf uitvoeren; verzin nooit dat een actie gelukt is als je daar geen resultaat van hebt. "
+        );
+
+        String voiceStyle =
+                VoiceSettings.style(context);
+
+        if (voiceStyle != null
+                && !voiceStyle.trim().isEmpty()) {
+            prompt.append("\n\nStemstijl:\n");
+            prompt.append(
+                    voiceStyle.trim()
+            );
+        }
+
+        String personality =
+                PersonalitySettings.prompt(context);
+
+        if (personality != null
+                && !personality.trim().isEmpty()) {
+            prompt.append("\n\nPersoonlijkheid:\n");
+            prompt.append(
+                    personality.trim()
+            );
+        }
+
+        String memory =
+                MemoryStore.getProfile(context);
+
+        if (memory != null
+                && !memory.trim().isEmpty()) {
+            prompt.append(
+                    "\n\nRelevant langetermijngeheugen over de gebruiker:\n"
+            );
+            prompt.append(
+                    memory.trim()
+            );
+        }
+
+        return prompt.toString();
+    }
+
+    private void handleRealtimeTranscript(
+            String query
+    ) {
+        String normalized =
+                query.toLowerCase(
+                        Locale.ROOT
+                );
+
+        if (normalized.equals("stop")
+                || normalized.contains(
+                        "maatje stop"
+                )
+                || normalized.contains(
+                        "ga maar weg"
+                )) {
+            if (realtimeVoiceClient != null) {
+                realtimeVoiceClient.cancelResponse();
+            }
+
+            finishOverlay();
+            return;
+        }
+
+        if (isScreenVisionQuery(normalized)) {
+            handleRealtimeScreenQuery(
+                    query,
+                    normalized
+            );
+            return;
+        }
+
+        InternetSettings.CommandResult
+                internetCommand =
+                InternetSettings.handleCommand(
+                        context,
+                        query
+                );
+
+        if (internetCommand.handled) {
+            if (realtimeVoiceClient != null) {
+                realtimeVoiceClient.cancelResponse();
+            }
+
+            showLocalAnswer(
+                    internetCommand.message
+            );
+            return;
+        }
+
+        PersonalitySettings.CommandResult
+                personalityCommand =
+                PersonalitySettings.handleCommand(
+                        context,
+                        query
+                );
+
+        if (personalityCommand.handled) {
+            if (realtimeVoiceClient != null) {
+                realtimeVoiceClient.cancelResponse();
+            }
+
+            showLocalAnswer(
+                    personalityCommand.message
+            );
+            return;
+        }
+
+        AssistantOverlayActions.Result action =
+                AssistantOverlayActions.handle(
+                        context,
+                        query
+                );
+
+        if (action.handled) {
+            if (realtimeVoiceClient != null) {
+                realtimeVoiceClient.cancelResponse();
+            }
+
+            showLocalAnswer(
+                    action.message
+            );
+            return;
+        }
+
+        boolean remembered =
+                MemoryStore.captureExplicitMemory(
+                        context,
+                        query
+                );
+
+        if (remembered) {
+            if (realtimeVoiceClient != null) {
+                realtimeVoiceClient.cancelResponse();
+            }
+
+            showLocalAnswer(
+                    "Opgeslagen in lokaal profielgeheugen."
+            );
+        }
+    }
+
+    private void handleRealtimeScreenQuery(
+            String query,
+            String normalized
+    ) {
+        RealtimeVoiceClient client =
+                realtimeVoiceClient;
+
+        if (client == null
+                || !client.isRunning()) {
+            handleQuery(query);
+            return;
+        }
+
+        client.cancelResponse();
+
+        final Bitmap screenshot =
+                copyLatestScreenshot();
+
+        if (screenshot == null) {
+            setStatus(
+                    "SCREEN • UNAVAILABLE"
+            );
+
+            if (answerText != null) {
+                answerText.setText(
+                        "Ik krijg van Android geen screenshot van dit scherm."
+                );
+            }
+            return;
+        }
+
+        final boolean highDetail =
+                requiresHighVisionDetail(
+                        normalized
+                );
+
+        setStatus(
+                "LOOKING AT SCREEN • LIVE"
+        );
+
+        if (answerText != null) {
+            answerText.setText(
+                    "Even kijken..."
+            );
+        }
+
+        chatExecutor.submit(() -> {
+            try {
+                String dataUrl =
+                        encodeScreenshot(
+                                screenshot,
+                                highDetail
+                        );
+
+                mainHandler.post(() -> {
+                    RealtimeVoiceClient active =
+                            realtimeVoiceClient;
+
+                    if (!sessionVisible
+                            || active == null
+                            || !active.isRunning()) {
+                        return;
+                    }
+
+                    active.sendImageQuestion(
+                            dataUrl,
+                            "Beantwoord mijn vorige vraag over wat er op mijn scherm staat. "
+                                    + "Gebruik deze screenshot daadwerkelijk. "
+                                    + "Mijn vraag was: "
+                                    + query
+                    );
+                });
+
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    if (sessionVisible) {
+                        setStatus(
+                                "SCREEN • ERROR"
+                        );
+
+                        if (answerText != null) {
+                            answerText.setText(
+                                    e.getMessage() == null
+                                            ? "Schermanalyse is mislukt."
+                                            : e.getMessage()
+                            );
+                        }
+                    }
+                });
+            } finally {
+                if (!screenshot.isRecycled()) {
+                    screenshot.recycle();
+                }
+            }
+        });
+    }
+
+    private void stopRealtimeVoice() {
+        RealtimeVoiceClient client =
+                realtimeVoiceClient;
+        realtimeVoiceClient = null;
+        realtimeConnected = false;
+
+        if (client != null) {
+            client.shutdown();
+        }
+
+        if (waveformView != null) {
+            waveformView.setMode(
+                    AudioWaveformView.MODE_IDLE
+            );
+        }
     }
 
     private void createSpeechRecognizer() {
@@ -1606,6 +2261,7 @@ final class MaatjeVoiceInteractionSession
     private void showLocalAnswer(
             String message
     ) {
+        stopRealtimeVoice();
         thinking = false;
 
         if (answerText != null) {
@@ -1887,6 +2543,7 @@ final class MaatjeVoiceInteractionSession
 
         sessionVisible = false;
 
+        stopRealtimeVoice();
         stopListening();
         stopPlayer();
 

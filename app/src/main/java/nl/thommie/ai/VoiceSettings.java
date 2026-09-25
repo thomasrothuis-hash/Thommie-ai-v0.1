@@ -77,8 +77,8 @@ final class VoiceSettings {
 
         TextView engineInfo = new TextView(activity);
         engineInfo.setText(
-                "Cloud voice via OpenAI gpt-4o-mini-tts.\n"
-                + "Dit vervangt de Samsung-voorleesstem voor MAATJE."
+                "Assistant-overlay: OpenAI gpt-realtime-2.1 speech-to-speech.\n"
+                + "De TEST STEM-knop gebruikt nog gpt-4o-mini-tts voor een losse stemtest."
         );
         engineInfo.setPadding(0, 0, 0, 20);
         box.addView(engineInfo);
@@ -213,7 +213,7 @@ final class VoiceSettings {
         });
 
         new AlertDialog.Builder(activity)
-                .setTitle("MAATJE v1.0.0 – Stem & audio")
+                .setTitle("MAATJE v1.1.0 – Stem & audio")
                 .setView(scroll)
                 .setPositiveButton("Opslaan", (d, which) -> {
                     String voice =

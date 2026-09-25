@@ -161,7 +161,7 @@ final class ConversationSettings {
 
         new AlertDialog.Builder(activity)
                 .setTitle(
-                        "MAATJE v1.0.0 – Gespreksmodus"
+                        "MAATJE v1.1.0 – Gespreksmodus"
                 )
                 .setView(box)
                 .setPositiveButton(

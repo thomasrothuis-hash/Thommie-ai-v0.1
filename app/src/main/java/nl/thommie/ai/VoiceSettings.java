@@ -213,7 +213,7 @@ final class VoiceSettings {
         });
 
         new AlertDialog.Builder(activity)
-                .setTitle("MAATJE v1.3.0 – Stem & audio")
+                .setTitle("MAATJE v1.3.0 ONEPLUS – Stem & audio")
                 .setView(scroll)
                 .setPositiveButton("Opslaan", (d, which) -> {
                     String voice =

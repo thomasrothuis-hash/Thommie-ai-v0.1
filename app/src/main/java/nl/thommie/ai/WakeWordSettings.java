@@ -100,7 +100,7 @@ final class WakeWordSettings {
         box.addView(info);
 
         new AlertDialog.Builder(activity)
-                .setTitle("MAATJE v1.3.0 – Wake word")
+                .setTitle("MAATJE v1.3.0 ONEPLUS – Wake word")
                 .setView(box)
                 .setPositiveButton(
                         "Opslaan",

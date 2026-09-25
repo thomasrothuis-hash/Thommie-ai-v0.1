@@ -1,6 +1,18 @@
-# MAATJE v1.3.0 + MAATJE Kiosk v1.0.1
+# MAATJE v1.3.0 OnePlus Edition + MAATJE Kiosk v1.0.1
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## v1.3.0 OnePlus Edition device-control hardening
+
+- Dedicated update track for the OnePlus kiosk device while keeping package nl.thommie.ai and the permanent signing key.
+- Replaces system Clock intents with MAATJE-owned timers and alarms using AlarmManager.
+- Active timers and alarms are persisted and automatically rescheduled after reboot or app replacement.
+- Adds an internal timers/alarms screen with per-item cancellation and cancel-all.
+- Adds a full-screen MAATJE timer/alarm alert with alarm audio, vibration and STOP.
+- Uses exact alarm / alarm-clock scheduling with fallback behavior for modern Android/OxygenOS.
+- Reworks flashlight selection for multi-camera OnePlus hardware: tries all flash-capable camera IDs and remembers the working torch provider.
+- Turning the torch off attempts all flash-capable camera IDs so stale multi-camera torch state is cleared.
+- Keeps realtime voice, camera vision, web search, STOP answer button and the MAATJE Kiosk Device Owner integration.
 
 ## v1.3.0 dedicated OnePlus kiosk integration
 

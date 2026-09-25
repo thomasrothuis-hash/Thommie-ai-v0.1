@@ -34,6 +34,8 @@ final class DeviceControl {
             "maatje_device_control";
     private static final String KEY_TORCH_STATE =
             "torch_state";
+    private static final String KEY_TORCH_CAMERA_ID =
+            "torch_camera_id";
 
     static final class CommandResult {
         final boolean handled;
@@ -187,8 +189,8 @@ final class DeviceControl {
 
         String message =
                 "Lokale toestelbediening in MAATJE:\n\n"
-                        + "• Timers en wekkers\n"
-                        + "• Zaklamp\n"
+                        + "• Interne MAATJE timers en wekkers (OnePlus-safe)\n"
+                        + "• Multi-camera zaklamp (OnePlus-safe)\n"
                         + "• Media-volume\n"
                         + "• Schermhelderheid\n"
                         + "• Batterijstatus\n"
@@ -208,7 +210,7 @@ final class DeviceControl {
         AlertDialog dialog =
                 new AlertDialog.Builder(activity)
                         .setTitle(
-                                "MAATJE v1.3.0 – Toestelbediening"
+                                "MAATJE v1.3.0 ONEPLUS – Toestelbediening"
                         )
                         .setMessage(message)
                         .setPositiveButton(
@@ -266,16 +268,59 @@ final class DeviceControl {
             return CommandResult.no();
         }
 
-        if (q.contains("open") || q.contains("toon") || q.contains("bekijk")) {
+        if (q.contains("open")
+                || q.contains("toon")
+                || q.contains("bekijk")
+                || q.contains("lijst")) {
             try {
-                activity.startActivity(new Intent(AlarmClock.ACTION_SHOW_TIMERS));
-                return new CommandResult(true, "Timers geopend.", "DEVICE • TIMERS");
+                activity.startActivity(
+                        new Intent(
+                                activity,
+                                MaatjeScheduleActivity.class
+                        )
+                );
+
+                return new CommandResult(
+                        true,
+                        "Timers geopend.",
+                        "DEVICE • TIMERS"
+                );
             } catch (Exception e) {
-                return new CommandResult(true, "Ik kon de timers niet openen.", "DEVICE • TIMER ERROR");
+                return new CommandResult(
+                        true,
+                        "Ik kon het timer-overzicht niet openen.",
+                        "DEVICE • TIMER ERROR"
+                );
             }
         }
 
+        if (q.contains("annuleer")
+                || q.contains("annuleren")
+                || q.contains("stop timer")
+                || q.contains("stop de timer")
+                || q.contains("verwijder")) {
+            int cancelled =
+                    MaatjeScheduler.cancelType(
+                            activity,
+                            MaatjeScheduler.TYPE_TIMER
+                    );
+
+            return new CommandResult(
+                    true,
+                    cancelled == 0
+                            ? "Er stonden geen actieve timers."
+                            : (
+                                    cancelled == 1
+                                            ? "Timer geannuleerd."
+                                            : cancelled
+                                            + " timers geannuleerd."
+                            ),
+                    "DEVICE • TIMER CANCEL"
+            );
+        }
+
         int seconds = parseDurationSeconds(q);
+
         if (seconds <= 0) {
             return new CommandResult(
                     true,
@@ -284,27 +329,33 @@ final class DeviceControl {
             );
         }
 
-        String label = extractTimerLabel(raw);
+        String label =
+                extractTimerLabel(raw);
+
         if (label.isEmpty()) {
-            label = "MAATJE";
+            label = "MAATJE timer";
         }
 
         try {
-            Intent intent = new Intent(AlarmClock.ACTION_SET_TIMER);
-            intent.putExtra(AlarmClock.EXTRA_LENGTH, seconds);
-            intent.putExtra(AlarmClock.EXTRA_MESSAGE, label);
-            intent.putExtra(AlarmClock.EXTRA_SKIP_UI, true);
-            activity.startActivity(intent);
+            MaatjeScheduler.scheduleTimer(
+                    activity,
+                    seconds,
+                    label
+            );
 
             return new CommandResult(
                     true,
-                    "Timer gezet voor " + formatDuration(seconds) + ".",
+                    "Timer gezet voor "
+                            + formatDuration(seconds)
+                            + ".",
                     "DEVICE • TIMER SET"
             );
+
         } catch (Exception e) {
             return new CommandResult(
                     true,
-                    "Timer instellen lukte niet: " + safeMessage(e),
+                    "Timer instellen lukte niet: "
+                            + safeMessage(e),
                     "DEVICE • TIMER ERROR"
             );
         }
@@ -315,20 +366,65 @@ final class DeviceControl {
             String raw,
             String q
     ) {
-        if (!q.contains("wekker") && !q.contains("alarm")) {
+        if (!q.contains("wekker")
+                && !q.contains("alarm")) {
             return CommandResult.no();
         }
 
-        if (q.contains("open") || q.contains("toon") || q.contains("bekijk")) {
+        if (q.contains("open")
+                || q.contains("toon")
+                || q.contains("bekijk")
+                || q.contains("lijst")) {
             try {
-                activity.startActivity(new Intent(AlarmClock.ACTION_SHOW_ALARMS));
-                return new CommandResult(true, "Wekkers geopend.", "DEVICE • ALARMS");
+                activity.startActivity(
+                        new Intent(
+                                activity,
+                                MaatjeScheduleActivity.class
+                        )
+                );
+
+                return new CommandResult(
+                        true,
+                        "Wekkers geopend.",
+                        "DEVICE • ALARMS"
+                );
             } catch (Exception e) {
-                return new CommandResult(true, "Ik kon de wekkers niet openen.", "DEVICE • ALARM ERROR");
+                return new CommandResult(
+                        true,
+                        "Ik kon het wekker-overzicht niet openen.",
+                        "DEVICE • ALARM ERROR"
+                );
             }
         }
 
-        int[] time = parseAlarmTime(q);
+        if (q.contains("annuleer")
+                || q.contains("annuleren")
+                || q.contains("stop wekker")
+                || q.contains("stop alarm")
+                || q.contains("verwijder")) {
+            int cancelled =
+                    MaatjeScheduler.cancelType(
+                            activity,
+                            MaatjeScheduler.TYPE_ALARM
+                    );
+
+            return new CommandResult(
+                    true,
+                    cancelled == 0
+                            ? "Er stonden geen actieve wekkers."
+                            : (
+                                    cancelled == 1
+                                            ? "Wekker geannuleerd."
+                                            : cancelled
+                                            + " wekkers geannuleerd."
+                            ),
+                    "DEVICE • ALARM CANCEL"
+            );
+        }
+
+        int[] time =
+                parseAlarmTime(q);
+
         if (time == null) {
             return new CommandResult(
                     true,
@@ -337,27 +433,21 @@ final class DeviceControl {
             );
         }
 
-        String label = extractAlarmLabel(raw);
+        String label =
+                extractAlarmLabel(raw);
+
         if (label.isEmpty()) {
-            label = "MAATJE";
+            label = "MAATJE wekker";
         }
 
         try {
-            Intent intent = new Intent(AlarmClock.ACTION_SET_ALARM);
-            intent.putExtra(AlarmClock.EXTRA_HOUR, time[0]);
-            intent.putExtra(AlarmClock.EXTRA_MINUTES, time[1]);
-            intent.putExtra(AlarmClock.EXTRA_MESSAGE, label);
-            intent.putExtra(AlarmClock.EXTRA_SKIP_UI, true);
-
-            if (q.contains("morgen")) {
-                Calendar tomorrow = Calendar.getInstance();
-                tomorrow.add(Calendar.DAY_OF_YEAR, 1);
-                ArrayList<Integer> days = new ArrayList<>();
-                days.add(tomorrow.get(Calendar.DAY_OF_WEEK));
-                intent.putIntegerArrayListExtra(AlarmClock.EXTRA_DAYS, days);
-            }
-
-            activity.startActivity(intent);
+            MaatjeScheduler.scheduleAlarm(
+                    activity,
+                    time[0],
+                    time[1],
+                    q.contains("morgen"),
+                    label
+            );
 
             return new CommandResult(
                     true,
@@ -369,10 +459,12 @@ final class DeviceControl {
                     ),
                     "DEVICE • ALARM SET"
             );
+
         } catch (Exception e) {
             return new CommandResult(
                     true,
-                    "Wekker instellen lukte niet: " + safeMessage(e),
+                    "Wekker instellen lukte niet: "
+                            + safeMessage(e),
                     "DEVICE • ALARM ERROR"
             );
         }
@@ -432,12 +524,18 @@ final class DeviceControl {
                                     Context.CAMERA_SERVICE
                             );
 
-            String cameraId =
-                    findFlashCamera(
+            if (manager == null) {
+                throw new Exception(
+                        "CameraManager niet beschikbaar."
+                );
+            }
+
+            List<String> candidates =
+                    findFlashCameras(
                             manager
                     );
 
-            if (cameraId == null) {
+            if (candidates.isEmpty()) {
                 return new CommandResult(
                         true,
                         "Ik kan geen bruikbare flitser op dit toestel vinden.",
@@ -445,43 +543,115 @@ final class DeviceControl {
                 );
             }
 
-            manager.setTorchMode(
-                    cameraId,
-                    turnOn
-            );
+            String remembered =
+                    prefs(activity)
+                            .getString(
+                                    KEY_TORCH_CAMERA_ID,
+                                    ""
+                            );
 
-            prefs(activity)
-                    .edit()
-                    .putBoolean(
-                            KEY_TORCH_STATE,
-                            turnOn
-                    )
-                    .apply();
+            if (!remembered.isEmpty()
+                    && candidates.remove(
+                    remembered
+            )) {
+                candidates.add(
+                        0,
+                        remembered
+                );
+            }
 
-            return new CommandResult(
-                    true,
-                    turnOn
-                            ? "Zaklamp aan."
-                            : "Zaklamp uit.",
-                    turnOn
-                            ? "DEVICE • TORCH ON"
-                            : "DEVICE • TORCH OFF"
-            );
+            if (!turnOn) {
+                int disabled = 0;
+                Exception lastError = null;
+
+                for (String id : candidates) {
+                    try {
+                        manager.setTorchMode(
+                                id,
+                                false
+                        );
+                        disabled++;
+                    } catch (Exception e) {
+                        lastError = e;
+                    }
+                }
+
+                prefs(activity)
+                        .edit()
+                        .putBoolean(
+                                KEY_TORCH_STATE,
+                                false
+                        )
+                        .apply();
+
+                if (disabled == 0
+                        && lastError != null) {
+                    throw lastError;
+                }
+
+                return new CommandResult(
+                        true,
+                        "Zaklamp uit.",
+                        "DEVICE • TORCH OFF"
+                );
+            }
+
+            Exception lastError = null;
+
+            for (String id : candidates) {
+                try {
+                    manager.setTorchMode(
+                            id,
+                            true
+                    );
+
+                    prefs(activity)
+                            .edit()
+                            .putBoolean(
+                                    KEY_TORCH_STATE,
+                                    true
+                            )
+                            .putString(
+                                    KEY_TORCH_CAMERA_ID,
+                                    id
+                            )
+                            .apply();
+
+                    return new CommandResult(
+                            true,
+                            "Zaklamp aan.",
+                            "DEVICE • TORCH ON"
+                    );
+
+                } catch (Exception e) {
+                    lastError = e;
+                }
+            }
+
+            throw lastError == null
+                    ? new Exception(
+                    "Geen torch-camera accepteerde de opdracht."
+            )
+                    : lastError;
 
         } catch (Exception e) {
             return new CommandResult(
                     true,
                     "Zaklamp bedienen lukte niet: "
-                            + safeMessage(e),
+                            + safeMessage(e)
+                            + ". Sluit eventueel live camera en probeer opnieuw.",
                     "DEVICE • TORCH ERROR"
             );
         }
     }
 
-    private static String findFlashCamera(
+    private static List<String> findFlashCameras(
             CameraManager manager
     ) throws Exception {
-        String fallback = null;
+        List<String> back =
+                new ArrayList<>();
+        List<String> other =
+                new ArrayList<>();
 
         for (String id :
                 manager.getCameraIdList()) {
@@ -500,10 +670,6 @@ final class DeviceControl {
                 continue;
             }
 
-            if (fallback == null) {
-                fallback = id;
-            }
-
             Integer facing =
                     c.get(
                             CameraCharacteristics
@@ -514,11 +680,14 @@ final class DeviceControl {
                     && facing
                     == CameraCharacteristics
                     .LENS_FACING_BACK) {
-                return id;
+                back.add(id);
+            } else {
+                other.add(id);
             }
         }
 
-        return fallback;
+        back.addAll(other);
+        return back;
     }
 
     private static CommandResult handleVolume(

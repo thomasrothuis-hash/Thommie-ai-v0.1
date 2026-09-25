@@ -1,6 +1,18 @@
-# MAATJE v1.1.0
+# MAATJE v1.1.1
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## v1.1.1 realtime echo / self-interrupt fix
+
+- Enables Android AcousticEchoCanceler on the realtime microphone session when the device supports it.
+- Enables NoiseSuppressor alongside the communication audio source.
+- Disables blind server-side interrupt_response and moves interruption control to the Android client.
+- Adds local barge-in detection that compares live microphone RMS against recent assistant-output RMS.
+- Suppresses microphone upload while MAATJE is speaking unless a real user voice stays clearly above the speaker echo for multiple audio frames.
+- Buffers the start of a genuine interruption and forwards it once barge-in is confirmed, so the beginning of the user's sentence is not lost.
+- Tracks active responses before sending response.cancel, preventing spurious "Cancellation failed: no active response found" errors.
+- Stops flushing assistant audio just because the server reports speech_started; only confirmed local barge-in can interrupt playback now.
+- Resets realtime audio levels and barge-in buffers cleanly when sessions start and stop.
 
 ## v1.1.0 realtime voice
 
@@ -166,4 +178,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v1.1.0.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v1.1.1.apk` as a workflow artifact.

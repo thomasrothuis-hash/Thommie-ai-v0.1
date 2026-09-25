@@ -8,11 +8,15 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaRecorder;
+import android.media.audiofx.AcousticEchoCanceler;
+import android.media.audiofx.NoiseSuppressor;
+import android.os.SystemClock;
 import android.util.Base64;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.ArrayDeque;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -49,6 +53,10 @@ final class RealtimeVoiceClient {
             new AtomicBoolean(false);
     private final AtomicBoolean socketReady =
             new AtomicBoolean(false);
+    private final AtomicBoolean responseActive =
+            new AtomicBoolean(false);
+    private final AtomicBoolean assistantAudioActive =
+            new AtomicBoolean(false);
     private final AtomicInteger playbackGeneration =
             new AtomicInteger(0);
 
@@ -66,6 +74,13 @@ final class RealtimeVoiceClient {
     private AudioDeviceInfo previousCommunicationDevice;
     private boolean previousSpeakerphoneOn = false;
     private boolean communicationAudioActive = false;
+    private AcousticEchoCanceler echoCanceler;
+    private NoiseSuppressor noiseSuppressor;
+    private volatile float recentOutputLevel = 0f;
+    private volatile long lastAssistantAudioMs = 0L;
+    private int bargeInCandidateChunks = 0;
+    private final ArrayDeque<byte[]> bargeInBuffer =
+            new ArrayDeque<>();
 
     private String instructions;
     private String voice;
@@ -99,6 +114,12 @@ final class RealtimeVoiceClient {
                         : instructions;
         this.voice =
                 normalizeVoice(voice);
+
+        responseActive.set(false);
+        assistantAudioActive.set(false);
+        recentOutputLevel = 0f;
+        lastAssistantAudioMs = 0L;
+        clearBargeInCandidate();
 
         httpClient =
                 new OkHttpClient.Builder()
@@ -199,6 +220,11 @@ final class RealtimeVoiceClient {
         }
 
         socketReady.set(false);
+        responseActive.set(false);
+        assistantAudioActive.set(false);
+        recentOutputLevel = 0f;
+        lastAssistantAudioMs = 0L;
+        clearBargeInCandidate();
         playbackGeneration.incrementAndGet();
 
         stopAudioOnly();
@@ -242,12 +268,17 @@ final class RealtimeVoiceClient {
     }
 
     void cancelResponse() {
-        try {
-            send(
-                    new JSONObject()
-                            .put("type", "response.cancel")
-            );
-        } catch (Exception ignored) {}
+        if (responseActive.compareAndSet(
+                true,
+                false
+        )) {
+            try {
+                send(
+                        new JSONObject()
+                                .put("type", "response.cancel")
+                );
+            } catch (Exception ignored) {}
+        }
 
         flushOutput();
     }
@@ -370,7 +401,7 @@ final class RealtimeVoiceClient {
                             )
                             .put(
                                     "interrupt_response",
-                                    true
+                                    false
                             );
 
             JSONObject input =
@@ -516,6 +547,10 @@ final class RealtimeVoiceClient {
                     );
                 }
 
+                enableInputAudioEffects(
+                        audioRecord.getAudioSessionId()
+                );
+
                 short[] samples =
                         new short[MIC_CHUNK_SAMPLES];
 
@@ -549,22 +584,10 @@ final class RealtimeVoiceClient {
                                     read
                             );
 
-                    String encoded =
-                            Base64.encodeToString(
-                                    pcm,
-                                    Base64.NO_WRAP
-                            );
-
-                    send(
-                            new JSONObject()
-                                    .put(
-                                            "type",
-                                            "input_audio_buffer.append"
-                                    )
-                                    .put(
-                                            "audio",
-                                            encoded
-                                    )
+                    handleMicrophoneChunk(
+                            samples,
+                            read,
+                            pcm
                     );
                 }
 
@@ -575,6 +598,8 @@ final class RealtimeVoiceClient {
                     );
                 }
             } finally {
+                releaseInputAudioEffects();
+
                 AudioRecord record =
                         audioRecord;
                 audioRecord = null;
@@ -590,6 +615,232 @@ final class RealtimeVoiceClient {
                 }
             }
         });
+    }
+
+    private void enableInputAudioEffects(
+            int audioSessionId
+    ) {
+        releaseInputAudioEffects();
+
+        try {
+            if (AcousticEchoCanceler.isAvailable()) {
+                echoCanceler =
+                        AcousticEchoCanceler.create(
+                                audioSessionId
+                        );
+
+                if (echoCanceler != null) {
+                    echoCanceler.setEnabled(true);
+                }
+            }
+        } catch (Exception ignored) {
+            echoCanceler = null;
+        }
+
+        try {
+            if (NoiseSuppressor.isAvailable()) {
+                noiseSuppressor =
+                        NoiseSuppressor.create(
+                                audioSessionId
+                        );
+
+                if (noiseSuppressor != null) {
+                    noiseSuppressor.setEnabled(true);
+                }
+            }
+        } catch (Exception ignored) {
+            noiseSuppressor = null;
+        }
+    }
+
+    private void releaseInputAudioEffects() {
+        AcousticEchoCanceler aec =
+                echoCanceler;
+        echoCanceler = null;
+
+        if (aec != null) {
+            try {
+                aec.release();
+            } catch (Exception ignored) {}
+        }
+
+        NoiseSuppressor ns =
+                noiseSuppressor;
+        noiseSuppressor = null;
+
+        if (ns != null) {
+            try {
+                ns.release();
+            } catch (Exception ignored) {}
+        }
+    }
+
+    private void handleMicrophoneChunk(
+            short[] samples,
+            int length,
+            byte[] pcm
+    ) throws Exception {
+        if (pcm == null
+                || pcm.length == 0) {
+            return;
+        }
+
+        long now =
+                SystemClock.elapsedRealtime();
+
+        float micLevel =
+                rmsShorts(
+                        samples,
+                        length
+                );
+
+        recentOutputLevel *= 0.93f;
+
+        boolean assistantWindow =
+                responseActive.get()
+                        || assistantAudioActive.get()
+                        || now - lastAssistantAudioMs < 550L;
+
+        if (!assistantWindow) {
+            clearBargeInCandidate();
+            sendInputPcm(pcm);
+            return;
+        }
+
+        float triggerLevel =
+                Math.max(
+                        0.045f,
+                        recentOutputLevel * 1.45f
+                                + 0.010f
+                );
+
+        if (micLevel > triggerLevel) {
+            bargeInCandidateChunks++;
+
+            bargeInBuffer.addLast(
+                    pcm.clone()
+            );
+
+            while (bargeInBuffer.size() > 5) {
+                bargeInBuffer.removeFirst();
+            }
+        } else {
+            clearBargeInCandidate();
+            return;
+        }
+
+        if (bargeInCandidateChunks < 4) {
+            return;
+        }
+
+        assistantAudioActive.set(false);
+        lastAssistantAudioMs = 0L;
+        recentOutputLevel = 0f;
+
+        cancelResponse();
+
+        while (!bargeInBuffer.isEmpty()) {
+            sendInputPcm(
+                    bargeInBuffer.removeFirst()
+            );
+        }
+
+        bargeInCandidateChunks = 0;
+    }
+
+    private void clearBargeInCandidate() {
+        bargeInCandidateChunks = 0;
+        bargeInBuffer.clear();
+    }
+
+    private void sendInputPcm(
+            byte[] pcm
+    ) throws Exception {
+        String encoded =
+                Base64.encodeToString(
+                        pcm,
+                        Base64.NO_WRAP
+                );
+
+        send(
+                new JSONObject()
+                        .put(
+                                "type",
+                                "input_audio_buffer.append"
+                        )
+                        .put(
+                                "audio",
+                                encoded
+                        )
+        );
+    }
+
+    private float rmsShorts(
+            short[] samples,
+            int length
+    ) {
+        if (samples == null
+                || length <= 0) {
+            return 0f;
+        }
+
+        int safeLength =
+                Math.min(
+                        length,
+                        samples.length
+                );
+
+        double sum = 0.0;
+
+        for (int i = 0; i < safeLength; i++) {
+            double value =
+                    samples[i] / 32768.0;
+            sum += value * value;
+        }
+
+        return safeLength == 0
+                ? 0f
+                : (float) Math.sqrt(
+                        sum / safeLength
+                );
+    }
+
+    private float rmsPcm16(
+            byte[] pcm
+    ) {
+        if (pcm == null
+                || pcm.length < 2) {
+            return 0f;
+        }
+
+        int samples =
+                pcm.length / 2;
+        double sum = 0.0;
+
+        for (int i = 0; i < samples; i++) {
+            int lo =
+                    pcm[i * 2] & 0xff;
+            int hi =
+                    pcm[i * 2 + 1];
+
+            short value =
+                    (short) (
+                            (hi << 8)
+                                    | lo
+                    );
+
+            double normalized =
+                    value / 32768.0;
+            sum +=
+                    normalized
+                            * normalized;
+        }
+
+        return samples == 0
+                ? 0f
+                : (float) Math.sqrt(
+                        sum / samples
+                );
     }
 
     private void startOutput() {
@@ -662,6 +913,18 @@ final class RealtimeVoiceClient {
                 || pcm.length == 0) {
             return;
         }
+
+        float outputLevel =
+                rmsPcm16(pcm);
+
+        recentOutputLevel =
+                Math.max(
+                        outputLevel,
+                        recentOutputLevel * 0.82f
+                );
+        lastAssistantAudioMs =
+                SystemClock.elapsedRealtime();
+        assistantAudioActive.set(true);
 
         listener.onAssistantPcm(pcm);
 
@@ -747,8 +1010,6 @@ final class RealtimeVoiceClient {
                 case "input_audio_buffer.speech_started":
                     userTranscript =
                             new StringBuilder();
-                    flushOutput();
-                    listener.onAssistantSpeaking(false);
                     listener.onUserSpeechStarted();
                     break;
 
@@ -791,6 +1052,8 @@ final class RealtimeVoiceClient {
                 }
 
                 case "response.created":
+                    responseActive.set(true);
+                    assistantAudioActive.set(true);
                     assistantTranscript =
                             new StringBuilder();
                     listener.onAssistantSpeaking(true);
@@ -849,6 +1112,8 @@ final class RealtimeVoiceClient {
                 }
 
                 case "response.done":
+                    responseActive.set(false);
+                    assistantAudioActive.set(false);
                     listener.onAssistantSpeaking(false);
                     break;
 
@@ -977,6 +1242,8 @@ final class RealtimeVoiceClient {
     }
 
     private void stopAudioOnly() {
+        releaseInputAudioEffects();
+
         AudioRecord record =
                 audioRecord;
         audioRecord = null;

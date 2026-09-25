@@ -38,6 +38,11 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
 
+    public static final String EXTRA_ASSISTANT_INVOCATION =
+            "maatje_assistant_invocation";
+    public static final String EXTRA_ASSISTANT_SOURCE =
+            "maatje_assistant_source";
+
     private static final int REQ_AUDIO = 1001;
     private static final int BG = Color.rgb(4, 8, 5);
     private static final int PANEL = Color.rgb(9, 17, 11);
@@ -83,6 +88,7 @@ public class MainActivity extends Activity {
     private boolean conversationModeActive = false;
     private long conversationExpiresAt = 0L;
     private boolean assistantSpeaking = false;
+    private boolean pendingAssistantInvocation = false;
     private long normalListeningBlockedUntil = 0L;
     private static final long POST_TTS_COOLDOWN_MS = 850L;
 
@@ -179,8 +185,46 @@ public class MainActivity extends Activity {
 
         offlineWakeWord.prepare();
 
+        consumeAssistantIntent(
+                getIntent()
+        );
+
         if (SecurePrefs.loadApiKey(this).isEmpty()) {
             showApiKeyDialog(true);
+        }
+    }
+
+    private void consumeAssistantIntent(
+            Intent intent
+    ) {
+        if (intent == null) {
+            return;
+        }
+
+        if (intent.getBooleanExtra(
+                EXTRA_ASSISTANT_INVOCATION,
+                false
+        )) {
+            pendingAssistantInvocation = true;
+        }
+    }
+
+    @Override
+    protected void onNewIntent(
+            Intent intent
+    ) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        consumeAssistantIntent(intent);
+
+        if (appVisible
+                && pendingAssistantInvocation) {
+            pendingAssistantInvocation = false;
+
+            mainHandler.postDelayed(
+                    this::startListening,
+                    300L
+            );
         }
     }
 
@@ -228,7 +272,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.9.2  •  PERSONAL AI TERMINAL"
+                "v0.9.3  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -305,7 +349,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.9.2 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.9.3 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -1316,6 +1360,41 @@ public class MainActivity extends Activity {
             } else {
                 scheduleWakeListening(300);
             }
+
+            MaatjeVoiceInteractionService
+                    .refreshFromActivity();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(
+            int requestCode,
+            int resultCode,
+            Intent data
+    ) {
+        super.onActivityResult(
+                requestCode,
+                resultCode,
+                data
+        );
+
+        if (requestCode
+                == AssistantSettings
+                .REQ_ASSISTANT_ROLE) {
+            boolean selected =
+                    AssistantSettings
+                            .isSelected(this);
+
+            Toast.makeText(
+                    this,
+                    selected
+                            ? "MAATJE is nu de standaard assistent."
+                            : "MAATJE is niet als standaard assistent ingesteld.",
+                    Toast.LENGTH_LONG
+            ).show();
+
+            MaatjeVoiceInteractionService
+                    .refreshFromActivity();
         }
     }
 
@@ -1323,6 +1402,7 @@ public class MainActivity extends Activity {
         String[] options = {
                 "API-key",
                 "Internet",
+                "Standaard assistent",
                 "Gebruik & tokens",
                 "Toestelbediening",
                 "Stem & audio",
@@ -1334,7 +1414,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.9.2 – Instellingen"
+                        "MAATJE v0.9.3 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -1344,19 +1424,21 @@ public class MainActivity extends Activity {
                             } else if (which == 1) {
                                 InternetSettings.show(this);
                             } else if (which == 2) {
-                                UsageTracker.show(this);
+                                AssistantSettings.show(this);
                             } else if (which == 3) {
-                                DeviceControl.showSettings(this);
+                                UsageTracker.show(this);
                             } else if (which == 4) {
+                                DeviceControl.showSettings(this);
+                            } else if (which == 5) {
                                 VoiceSettings.show(
                                         this,
                                         this::testCloudVoice
                                 );
-                            } else if (which == 5) {
-                                showMemoryDialog();
                             } else if (which == 6) {
-                                PersonalitySettings.show(this);
+                                showMemoryDialog();
                             } else if (which == 7) {
+                                PersonalitySettings.show(this);
+                            } else if (which == 8) {
                                 ConversationSettings.show(
                                         this,
                                         enabled -> {
@@ -1371,6 +1453,9 @@ public class MainActivity extends Activity {
                                         this,
                                         enabled -> {
                                             wakeWordEnabled = enabled;
+
+                                            MaatjeVoiceInteractionService
+                                                    .refreshFromActivity();
 
                                             updateWakeDebugVisibility();
                                             stopRecognitionSession();
@@ -1454,7 +1539,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.9.2 – Geheugen"
+                                "MAATJE v0.9.3 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1544,7 +1629,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.9.2 – API"
+                                "MAATJE v0.9.3 – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -2515,7 +2600,23 @@ public class MainActivity extends Activity {
         wakeWordEnabled =
                 WakeWordSettings.enabled(this);
 
-        scheduleWakeListening(600);
+        MaatjeVoiceInteractionService
+                .setActivityVisible(true);
+
+        if (pendingAssistantInvocation) {
+            pendingAssistantInvocation = false;
+
+            stateText.setText(
+                    "ASSISTANT • LISTENING"
+            );
+
+            mainHandler.postDelayed(
+                    this::startListening,
+                    350L
+            );
+        } else {
+            scheduleWakeListening(600);
+        }
     }
 
     @Override
@@ -2523,6 +2624,9 @@ public class MainActivity extends Activity {
         appVisible = false;
         endConversationSession();
         stopRecognitionSession();
+
+        MaatjeVoiceInteractionService
+                .setActivityVisible(false);
 
         super.onPause();
     }

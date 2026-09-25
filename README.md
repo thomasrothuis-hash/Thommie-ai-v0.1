@@ -1,8 +1,19 @@
-# MAATJE v0.9.2
+# MAATJE v0.9.3
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
 
-## v0.9.2 features
+## v0.9.3 features
+
+- Registers MAATJE as an Android VoiceInteractionService and Assistant-role candidate.
+- New Settings > Standaard assistent flow using Android RoleManager.
+- Separate VoiceInteractionSessionService process for system assistant invocations.
+- Assistant invocation opens MAATJE directly in command-listening mode.
+- Local Vosk background wake-word engine while MAATJE is the selected assistant and the Activity is closed.
+- Existing Wake word switch and sensitivity also control background "Hey Maatje".
+- Foreground/background microphone ownership handoff prevents both wake engines from intentionally listening at the same time.
+- Supports Android assist gesture and launch-from-keyguard metadata.
+
+### Existing v0.9.2 features
 
 - Local timers via Android AlarmClock with hours, minutes and seconds.
 - Local alarms/wekkers including 24-hour times, half zeven, kwart over and kwart voor.
@@ -75,8 +86,7 @@ gradle assembleDebug
 Expected output:
 `app/build/outputs/apk/debug/app-debug.apk`
 
-## Planned v0.9.2
-- Local wake word ("Hey ChatGPT")
+## Planned next
 - Auto-start on boot
 - Optional launcher/kiosk mode
 - Realtime speech-to-speech
@@ -85,4 +95,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_AI_v0.9.2.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v0.9.3.apk` as a workflow artifact.

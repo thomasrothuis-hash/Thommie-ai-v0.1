@@ -2,7 +2,7 @@
 <voice-interaction-service
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:sessionService="nl.thommie.ai.MaatjeVoiceInteractionSessionService"
-    android:recognitionService=""
+    android:recognitionService="nl.thommie.ai.MaatjeRecognitionService"
     android:settingsActivity="nl.thommie.ai.MainActivity"
     android:supportsAssist="true"
     android:supportsLaunchVoiceAssistFromKeyguard="true"

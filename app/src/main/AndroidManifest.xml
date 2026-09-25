@@ -64,5 +64,18 @@
             android:process=":assistant_session"
             android:exported="true" />
 
+        <service
+            android:name=".MaatjeRecognitionService"
+            android:label="MAATJE Speech"
+            android:permission="android.permission.BIND_SPEECH_RECOGNITION"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech"
+                android:resource="@xml/recognition_service" />
+        </service>
+
     </application>
 </manifest>

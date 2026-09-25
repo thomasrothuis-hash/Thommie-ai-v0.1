@@ -3,10 +3,12 @@ package nl.thommie.ai;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.role.RoleManager;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.provider.Settings;
+import android.service.voice.VoiceInteractionService;
 import android.widget.Toast;
 
 final class AssistantSettings {
@@ -19,7 +21,7 @@ final class AssistantSettings {
             Context context
     ) {
         if (Build.VERSION.SDK_INT < 29) {
-            return false;
+            return true;
         }
 
         RoleManager roleManager =
@@ -27,8 +29,8 @@ final class AssistantSettings {
                         Context.ROLE_SERVICE
                 );
 
-        return roleManager != null
-                && roleManager.isRoleAvailable(
+        return roleManager == null
+                || roleManager.isRoleAvailable(
                         RoleManager.ROLE_ASSISTANT
                 );
     }
@@ -36,115 +38,77 @@ final class AssistantSettings {
     static boolean isSelected(
             Context context
     ) {
-        if (!isAvailable(context)) {
-            return false;
+        ComponentName service =
+                new ComponentName(
+                        context,
+                        MaatjeVoiceInteractionService.class
+                );
+
+        if (VoiceInteractionService.isActiveService(
+                context,
+                service
+        )) {
+            return true;
         }
 
-        RoleManager roleManager =
-                (RoleManager) context.getSystemService(
-                        Context.ROLE_SERVICE
-                );
+        if (Build.VERSION.SDK_INT >= 29) {
+            RoleManager roleManager =
+                    (RoleManager) context
+                            .getSystemService(
+                                    Context.ROLE_SERVICE
+                            );
 
-        return roleManager != null
-                && roleManager.isRoleHeld(
-                        RoleManager.ROLE_ASSISTANT
-                );
+            return roleManager != null
+                    && roleManager.isRoleHeld(
+                            RoleManager.ROLE_ASSISTANT
+                    );
+        }
+
+        return false;
     }
 
     static void show(
             Activity activity
     ) {
-        boolean available =
-                isAvailable(activity);
-
         boolean selected =
                 isSelected(activity);
 
-        String message;
+        String message =
+                selected
+                        ? "MAATJE is momenteel de standaard Android-assistent.\n\n"
+                        + "De VoiceInteractionService kan daardoor beschikbaar blijven "
+                        + "voor assistent-aanroepen en 'Hey Maatje' buiten de gewone app."
+                        : "Kies in het volgende Android-scherm bij 'Digitale assistent-app' "
+                        + "of 'Standaard digitale assistent' voor MAATJE.\n\n"
+                        + "Dit moet via Android Instellingen; Android 16 laat de Assistant-role "
+                        + "niet rechtstreeks door een app aanvragen.";
 
-        if (!available) {
-            message =
-                    "Android biedt op dit toestel geen Assistant-role via RoleManager aan. "
-                            + "Ik kan wel het systeemscherm voor assistent/spraak openen.";
-        } else if (selected) {
-            message =
-                    "MAATJE is momenteel de standaard assistent.\n\n"
-                            + "Wanneer Android de assistent aanroept, opent MAATJE direct in luistermodus. "
-                            + "Als 'Hey Maatje' aan staat, luistert de geselecteerde VoiceInteractionService "
-                            + "ook buiten de gewone app via de lokale Vosk wake-word engine.";
-        } else {
-            message =
-                    "Maak MAATJE de standaard Android-assistent.\n\n"
-                            + "Android houdt de geselecteerde VoiceInteractionService beschikbaar voor "
-                            + "assistent-aanroepen en achtergrond-hotwording. "
-                            + "Je moet dit éénmalig zelf bevestigen in het systeemvenster.";
-        }
-
-        AlertDialog dialog =
-                new AlertDialog.Builder(activity)
-                        .setTitle(
-                                "MAATJE v0.9.3 – Standaard assistent"
-                        )
-                        .setMessage(message)
-                        .setPositiveButton(
-                                selected
-                                        ? "Systeeminstellingen"
-                                        : "Kies MAATJE",
-                                null
-                        )
-                        .setNegativeButton(
-                                "Sluiten",
-                                null
-                        )
-                        .create();
-
-        dialog.setOnShowListener(d -> {
-            dialog.getButton(
-                    AlertDialog.BUTTON_POSITIVE
-            ).setOnClickListener(v -> {
-                if (available
-                        && !isSelected(activity)) {
-                    requestRole(activity);
-                } else {
-                    openAssistantSettings(
-                            activity
-                    );
-                }
-            });
-        });
-
-        dialog.show();
+        new AlertDialog.Builder(activity)
+                .setTitle(
+                        "MAATJE v0.9.3.1.1 – Standaard assistent"
+                )
+                .setMessage(message)
+                .setPositiveButton(
+                        selected
+                                ? "Open instellingen"
+                                : "Naar assistent-keuze",
+                        (dialog, which) ->
+                                openAssistantSettings(
+                                        activity
+                                )
+                )
+                .setNegativeButton(
+                        "Sluiten",
+                        null
+                )
+                .show();
     }
 
     static void requestRole(
             Activity activity
     ) {
-        if (Build.VERSION.SDK_INT >= 29) {
-            RoleManager roleManager =
-                    (RoleManager) activity
-                            .getSystemService(
-                                    Context.ROLE_SERVICE
-                            );
-
-            if (roleManager != null
-                    && roleManager.isRoleAvailable(
-                            RoleManager.ROLE_ASSISTANT
-                    )) {
-                Intent intent =
-                        roleManager
-                                .createRequestRoleIntent(
-                                        RoleManager.ROLE_ASSISTANT
-                                );
-
-                activity.startActivityForResult(
-                        intent,
-                        REQ_ASSISTANT_ROLE
-                );
-
-                return;
-            }
-        }
-
+        // ROLE_ASSISTANT is not requestable on current Android.
+        // Always send the user to the system's Assist & voice input screen.
         openAssistantSettings(
                 activity
         );
@@ -153,28 +117,42 @@ final class AssistantSettings {
     static void openAssistantSettings(
             Activity activity
     ) {
-        try {
-            Intent intent =
-                    new Intent(
-                            Settings.ACTION_VOICE_INPUT_SETTINGS
-                    );
-
-            activity.startActivity(intent);
-
-        } catch (Exception e) {
-            try {
-                activity.startActivity(
+        Intent[] candidates =
+                new Intent[]{
+                        new Intent(
+                                Settings.ACTION_VOICE_INPUT_SETTINGS
+                        ),
+                        new Intent(
+                                Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS
+                        ),
                         new Intent(
                                 Settings.ACTION_SETTINGS
                         )
-                );
-            } catch (Exception ignored) {
-                Toast.makeText(
-                        activity,
-                        "Assistent-instellingen konden niet worden geopend.",
-                        Toast.LENGTH_SHORT
-                ).show();
-            }
+                };
+
+        for (Intent intent : candidates) {
+            try {
+                if (intent.resolveActivity(
+                        activity.getPackageManager()
+                ) != null) {
+                    activity.startActivity(
+                            intent
+                    );
+
+                    Toast.makeText(
+                            activity,
+                            "Kies bij Digitale assistent-app voor MAATJE.",
+                            Toast.LENGTH_LONG
+                    ).show();
+                    return;
+                }
+            } catch (Exception ignored) {}
         }
+
+        Toast.makeText(
+                activity,
+                "Assistent-instellingen konden niet worden geopend.",
+                Toast.LENGTH_LONG
+        ).show();
     }
 }

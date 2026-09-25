@@ -272,7 +272,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v0.9.3  •  PERSONAL AI TERMINAL"
+                "v0.9.3.1.1  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -349,7 +349,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v0.9.3 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v0.9.3.1.1 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -1366,38 +1366,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    @Override
-    protected void onActivityResult(
-            int requestCode,
-            int resultCode,
-            Intent data
-    ) {
-        super.onActivityResult(
-                requestCode,
-                resultCode,
-                data
-        );
-
-        if (requestCode
-                == AssistantSettings
-                .REQ_ASSISTANT_ROLE) {
-            boolean selected =
-                    AssistantSettings
-                            .isSelected(this);
-
-            Toast.makeText(
-                    this,
-                    selected
-                            ? "MAATJE is nu de standaard assistent."
-                            : "MAATJE is niet als standaard assistent ingesteld.",
-                    Toast.LENGTH_LONG
-            ).show();
-
-            MaatjeVoiceInteractionService
-                    .refreshFromActivity();
-        }
-    }
-
     private void showSettingsMenu() {
         String[] options = {
                 "API-key",
@@ -1414,7 +1382,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v0.9.3 – Instellingen"
+                        "MAATJE v0.9.3.1.1 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -1539,7 +1507,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.9.3 – Geheugen"
+                                "MAATJE v0.9.3.1.1 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1629,7 +1597,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v0.9.3 – API"
+                                "MAATJE v0.9.3.1.1 – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -2602,6 +2570,14 @@ public class MainActivity extends Activity {
 
         MaatjeVoiceInteractionService
                 .setActivityVisible(true);
+
+        if (AssistantSettings.isSelected(this)
+                && stateText != null
+                && !pendingAssistantInvocation) {
+            stateText.setText(
+                    "READY • DEFAULT ASSISTANT"
+            );
+        }
 
         if (pendingAssistantInvocation) {
             pendingAssistantInvocation = false;

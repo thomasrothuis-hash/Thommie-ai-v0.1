@@ -1,6 +1,14 @@
-# MAATJE v0.9.3
+# MAATJE v0.9.3.1
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## v0.9.3.1 hotfix
+
+- Fixes the Default Assistant setup flow on Android 16/LineageOS by opening the system Assist & voice input screen instead of trying to request the non-requestable ASSISTANT role directly.
+- Adds a valid RecognitionService component required by Android's VoiceInteractionService metadata.
+- RecognitionService proxies to an external installed recognizer so MAATJE does not replace working speech recognition with a stub.
+- Default-assistant state now also checks VoiceInteractionService.isActiveService().
+- Shows READY • DEFAULT ASSISTANT after returning to MAATJE when Android has activated it.
 
 ## v0.9.3 features
 
@@ -95,4 +103,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v0.9.3.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v0.9.3.1.apk` as a workflow artifact.

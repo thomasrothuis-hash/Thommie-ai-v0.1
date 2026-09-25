@@ -7,6 +7,7 @@ import android.content.pm.ResolveInfo;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.RemoteException;
 import android.speech.RecognitionListener;
 import android.speech.RecognitionService;
 import android.speech.SpeechRecognizer;
@@ -33,9 +34,9 @@ public class MaatjeRecognitionService
                     findExternalRecognizer();
 
             if (backend == null) {
-                callback.error(
-                        SpeechRecognizer
-                                .ERROR_CLIENT
+                safeError(
+                        callback,
+                        SpeechRecognizer.ERROR_CLIENT
                 );
                 return;
             }
@@ -55,44 +56,58 @@ public class MaatjeRecognitionService
                                     public void onReadyForSpeech(
                                             Bundle params
                                     ) {
-                                        callback.readyForSpeech(
-                                                params
-                                        );
+                                        try {
+                                            callback.readyForSpeech(
+                                                    params
+                                            );
+                                        } catch (RemoteException ignored) {}
                                     }
 
                                     @Override
                                     public void onBeginningOfSpeech() {
-                                        callback.beginningOfSpeech();
+                                        try {
+                                            callback.beginningOfSpeech();
+                                        } catch (RemoteException ignored) {}
                                     }
 
                                     @Override
                                     public void onRmsChanged(
                                             float rmsdB
                                     ) {
-                                        callback.rmsChanged(
-                                                rmsdB
-                                        );
+                                        try {
+                                            callback.rmsChanged(
+                                                    rmsdB
+                                            );
+                                        } catch (RemoteException ignored) {}
                                     }
 
                                     @Override
                                     public void onBufferReceived(
                                             byte[] buffer
                                     ) {
-                                        callback.bufferReceived(
-                                                buffer
-                                        );
+                                        try {
+                                            callback.bufferReceived(
+                                                    buffer
+                                            );
+                                        } catch (RemoteException ignored) {}
                                     }
 
                                     @Override
                                     public void onEndOfSpeech() {
-                                        callback.endOfSpeech();
+                                        try {
+                                            callback.endOfSpeech();
+                                        } catch (RemoteException ignored) {}
                                     }
 
                                     @Override
                                     public void onError(
                                             int error
                                     ) {
-                                        callback.error(error);
+                                        safeError(
+                                                callback,
+                                                error
+                                        );
+
                                         destroyRecognizer();
                                     }
 
@@ -100,7 +115,12 @@ public class MaatjeRecognitionService
                                     public void onResults(
                                             Bundle results
                                     ) {
-                                        callback.results(results);
+                                        try {
+                                            callback.results(
+                                                    results
+                                            );
+                                        } catch (RemoteException ignored) {}
+
                                         destroyRecognizer();
                                     }
 
@@ -108,9 +128,11 @@ public class MaatjeRecognitionService
                                     public void onPartialResults(
                                             Bundle partialResults
                                     ) {
-                                        callback.partialResults(
-                                                partialResults
-                                        );
+                                        try {
+                                            callback.partialResults(
+                                                    partialResults
+                                            );
+                                        } catch (RemoteException ignored) {}
                                     }
 
                                     @Override
@@ -126,10 +148,11 @@ public class MaatjeRecognitionService
                 );
 
             } catch (Exception e) {
-                callback.error(
-                        SpeechRecognizer
-                                .ERROR_CLIENT
+                safeError(
+                        callback,
+                        SpeechRecognizer.ERROR_CLIENT
                 );
+
                 destroyRecognizer();
             }
         });
@@ -171,6 +194,15 @@ public class MaatjeRecognitionService
 
         destroyRecognizer();
         super.onDestroy();
+    }
+
+    private void safeError(
+            Callback callback,
+            int error
+    ) {
+        try {
+            callback.error(error);
+        } catch (RemoteException ignored) {}
     }
 
     private ComponentName findExternalRecognizer() {
@@ -226,8 +258,7 @@ public class MaatjeRecognitionService
             String lower =
                     packageName == null
                             ? ""
-                            : packageName
-                            .toLowerCase();
+                            : packageName.toLowerCase();
 
             if (lower.contains("google")
                     || lower.contains("lineage")

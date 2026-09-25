@@ -1,6 +1,18 @@
-# MAATJE v1.3.0 OnePlus Edition + MAATJE Kiosk v1.0.1
+# MAATJE v1.3.1 OnePlus Edition + MAATJE Kiosk v1.0.2
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## v1.3.1 OnePlus Edition updater + UI fix
+
+- MAATJE Kiosk v1.0.2 switches QR updates from silent install to Android's user-confirmed PackageInstaller flow for OxygenOS.
+- Kiosk validates package name and signing certificate before Android is allowed to show the installer.
+- Lock Task is temporarily released only for the protected installer/settings step and is automatically reapplied afterwards.
+- If Android has not yet trusted MAATJE Kiosk as an install source, Kiosk opens the exact one-time unknown-source permission screen.
+- Successful updates return through KioskActivity so Device Owner policy and Lock Task are re-applied before MAATJE starts.
+- Adds direct MAATJE -> Toestel & Kiosk -> MAATJE updaten via QR -> PIN -> QR routing.
+- Merges the duplicate Toestelbediening and Kiosk & toestelcontrole entries into one Toestel & Kiosk menu.
+- Adds a consistent dark MAATJE AlertDialog theme so OxygenOS no longer renders the settings popups as a bright system dialog.
+- Keeps the OnePlus timer/alarm engine, multi-camera torch fix, realtime voice, camera vision and web search.
 
 ## v1.3.0 OnePlus Edition device-control hardening
 

@@ -325,7 +325,7 @@ final class UpdateServer {
         callback.onStatus(
                 "MAATJE "
                         + version
-                        + " gevalideerd. Installeren..."
+                        + " gevalideerd. Wachten op Android-bevestiging..."
         );
 
         ApkInstaller.installMaatje(
@@ -338,7 +338,7 @@ final class UpdateServer {
                 200,
                 "MAATJE "
                         + version
-                        + " ontvangen en installatie gestart. Je kunt dit venster sluiten."
+                        + " ontvangen en gecontroleerd. Bevestig de installatie nu op de OnePlus."
         );
 
         running = false;

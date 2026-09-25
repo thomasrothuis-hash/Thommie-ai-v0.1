@@ -12,6 +12,8 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
+import android.net.Uri;
+import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -47,6 +49,8 @@ public class AdminPanelActivity extends Activity {
 
     private UpdateServer updateServer;
     private boolean maintenanceReturnPending =
+            false;
+    private boolean installFlowActive =
             false;
 
     private final BroadcastReceiver installReceiver =
@@ -84,9 +88,98 @@ public class AdminPanelActivity extends Activity {
 
                     if (status
                             == PackageInstaller
-                            .STATUS_SUCCESS) {
+                            .STATUS_PENDING_USER_ACTION) {
+                        Intent confirmation;
+
+                        if (Build.VERSION.SDK_INT >= 33) {
+                            confirmation =
+                                    intent.getParcelableExtra(
+                                            "confirmation_intent",
+                                            Intent.class
+                                    );
+                        } else {
+                            confirmation =
+                                    intent.getParcelableExtra(
+                                            "confirmation_intent"
+                                    );
+                        }
+
+                        if (confirmation == null) {
+                            installFlowActive = false;
+                            updateStatus.setText(
+                                    "Android vroeg om bevestiging, maar leverde geen installatiescherm."
+                            );
+                            KioskPolicy.leaveMaintenance(
+                                    AdminPanelActivity.this
+                            );
+                            return;
+                        }
+
+                        installFlowActive = true;
+                        maintenanceReturnPending = true;
                         stopUpdateServer();
+
+                        if (qrView != null) {
+                            qrView.setVisibility(
+                                    View.GONE
+                            );
+                        }
+
+                        if (updateAddress != null) {
+                            updateAddress.setText("");
+                        }
+
+                        updateStatus.setText(
+                                "APK gecontroleerd. Bevestig nu de installatie op deze OnePlus."
+                        );
+
+                        KioskPolicy.enterMaintenance(
+                                AdminPanelActivity.this
+                        );
+
+                        confirmation.addFlags(
+                                Intent.FLAG_ACTIVITY_NEW_TASK
+                        );
+
+                        try {
+                            startActivity(
+                                    confirmation
+                            );
+                        } catch (Exception e) {
+                            installFlowActive = false;
+                            maintenanceReturnPending = false;
+                            updateStatus.setText(
+                                    "Android installatiescherm kon niet openen: "
+                                            + e.getMessage()
+                            );
+                            KioskPolicy.leaveMaintenance(
+                                    AdminPanelActivity.this
+                            );
+                        }
+
+                        return;
                     }
+
+                    if (status
+                            == PackageInstaller
+                            .STATUS_SUCCESS) {
+                        installFlowActive = false;
+                        maintenanceReturnPending = false;
+                        stopUpdateServer();
+                        KioskPolicy.leaveMaintenance(
+                                AdminPanelActivity.this
+                        );
+
+                        mainWindowReturnToMaatje();
+                        return;
+                    }
+
+                    installFlowActive = false;
+                    maintenanceReturnPending = false;
+                    stopUpdateServer();
+                    KioskPolicy.leaveMaintenance(
+                            AdminPanelActivity.this
+                    );
                 }
             };
 
@@ -98,15 +191,30 @@ public class AdminPanelActivity extends Activity {
 
         buildUi();
         registerInstallReceiver();
+
+        if (getIntent().getBooleanExtra(
+                "start_update",
+                false
+        )) {
+            updateStatus.postDelayed(
+                    this::startUpdateServer,
+                    250L
+            );
+        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
 
-        if (maintenanceReturnPending) {
+        if (maintenanceReturnPending
+                && !installFlowActive) {
             maintenanceReturnPending =
                     false;
+            KioskPolicy.leaveMaintenance(
+                    this
+            );
+        } else if (installFlowActive) {
             KioskPolicy.leaveMaintenance(
                     this
             );
@@ -328,6 +436,16 @@ public class AdminPanelActivity extends Activity {
         setContentView(scroll);
     }
 
+    private void mainWindowReturnToMaatje() {
+        updateStatus.postDelayed(
+                () -> {
+                    KioskPolicy.apply(this);
+                    KioskPolicy.launchMaatje(this);
+                },
+                450L
+        );
+    }
+
     private void refreshOwnerStatus() {
         boolean owner =
                 KioskPolicy.isDeviceOwner(
@@ -342,6 +460,41 @@ public class AdminPanelActivity extends Activity {
     }
 
     private void startUpdateServer() {
+        if (Build.VERSION.SDK_INT >= 26
+                && !getPackageManager()
+                .canRequestPackageInstalls()) {
+            try {
+                installFlowActive = false;
+                maintenanceReturnPending = true;
+                updateStatus.setText(
+                        "Geef MAATJE Kiosk éénmalig toestemming om APK-updates te installeren."
+                );
+
+                KioskPolicy.enterMaintenance(
+                        this
+                );
+
+                Intent intent =
+                        new Intent(
+                                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                Uri.parse(
+                                        "package:"
+                                                + getPackageName()
+                                )
+                        );
+
+                startActivity(intent);
+
+            } catch (Exception e) {
+                updateStatus.setText(
+                        "Installatierechten konden niet worden geopend: "
+                                + e.getMessage()
+                );
+            }
+
+            return;
+        }
+
         if (!KioskPolicy.isDeviceOwner(
                 this
         )) {

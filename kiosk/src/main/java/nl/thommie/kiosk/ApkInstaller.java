@@ -111,7 +111,7 @@ final class ApkInstaller {
         if (Build.VERSION.SDK_INT >= 26) {
             params.setInstallReason(
                     PackageManager
-                            .INSTALL_REASON_POLICY
+                            .INSTALL_REASON_USER
             );
         }
 
@@ -119,7 +119,7 @@ final class ApkInstaller {
             params.setRequireUserAction(
                     PackageInstaller
                             .SessionParams
-                            .USER_ACTION_NOT_REQUIRED
+                            .USER_ACTION_REQUIRED
             );
         }
 

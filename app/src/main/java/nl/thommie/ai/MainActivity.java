@@ -331,7 +331,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v1.3.0-oneplus  •  ONEPLUS EDITION • PERSONAL AI TERMINAL"
+                "v1.3.1-oneplus  •  ONEPLUS EDITION • PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -2387,8 +2387,7 @@ public class MainActivity extends Activity {
                 "Internet",
                 "Standaard assistent",
                 "Gebruik & tokens",
-                "Toestelbediening",
-                "Kiosk & toestelcontrole",
+                "Toestel & Kiosk",
                 "Stem & audio",
                 "Geheugen",
                 "Persoonlijkheid",
@@ -2398,7 +2397,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v1.3.0 ONEPLUS – Instellingen"
+                        "MAATJE v1.3.1 ONEPLUS – Instellingen"
                 )
                 .setItems(
                         options,
@@ -2412,19 +2411,17 @@ public class MainActivity extends Activity {
                             } else if (which == 3) {
                                 UsageTracker.show(this);
                             } else if (which == 4) {
-                                DeviceControl.showSettings(this);
-                            } else if (which == 5) {
                                 KioskBridge.showDevicePanel(this);
-                            } else if (which == 6) {
+                            } else if (which == 5) {
                                 VoiceSettings.show(
                                         this,
                                         this::testCloudVoice
                                 );
-                            } else if (which == 7) {
+                            } else if (which == 6) {
                                 showMemoryDialog();
-                            } else if (which == 8) {
+                            } else if (which == 7) {
                                 PersonalitySettings.show(this);
-                            } else if (which == 9) {
+                            } else if (which == 8) {
                                 ConversationSettings.show(
                                         this,
                                         enabled -> {
@@ -2525,7 +2522,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.3.0 ONEPLUS – Geheugen"
+                                "MAATJE v1.3.1 ONEPLUS – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -2615,7 +2612,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.3.0 ONEPLUS – API"
+                                "MAATJE v1.3.1 ONEPLUS – API"
                         )
                         .setView(box)
                         .setPositiveButton(

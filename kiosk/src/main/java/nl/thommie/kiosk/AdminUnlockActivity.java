@@ -31,6 +31,7 @@ public class AdminUnlockActivity extends Activity {
     private TextView title;
     private TextView subtitle;
     private boolean creating;
+    private boolean openUpdateAfterUnlock;
 
     @Override
     protected void onCreate(
@@ -40,6 +41,12 @@ public class AdminUnlockActivity extends Activity {
 
         creating =
                 !PinStore.hasPin(this);
+
+        openUpdateAfterUnlock =
+                getIntent().getBooleanExtra(
+                        "open_update",
+                        false
+                );
 
         buildUi();
     }
@@ -277,12 +284,20 @@ public class AdminUnlockActivity extends Activity {
     }
 
     private void openAdmin() {
-        startActivity(
+        Intent intent =
                 new Intent(
                         this,
                         AdminPanelActivity.class
-                )
-        );
+                );
+
+        if (openUpdateAfterUnlock) {
+            intent.putExtra(
+                    "start_update",
+                    true
+            );
+        }
+
+        startActivity(intent);
         finish();
     }
 

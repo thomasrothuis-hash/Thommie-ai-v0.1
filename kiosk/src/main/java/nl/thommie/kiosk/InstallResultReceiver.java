@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
+import android.os.Build;
 
 public class InstallResultReceiver
         extends BroadcastReceiver {
@@ -66,13 +67,51 @@ public class InstallResultReceiver
                 message
         );
 
+        if (status
+                == PackageInstaller
+                .STATUS_PENDING_USER_ACTION) {
+            Intent confirmation;
+
+            if (Build.VERSION.SDK_INT >= 33) {
+                confirmation =
+                        intent.getParcelableExtra(
+                                Intent.EXTRA_INTENT,
+                                Intent.class
+                        );
+            } else {
+                confirmation =
+                        intent.getParcelableExtra(
+                                Intent.EXTRA_INTENT
+                        );
+            }
+
+            if (confirmation != null) {
+                update.putExtra(
+                        "confirmation_intent",
+                        confirmation
+                );
+            }
+        }
+
         context.sendBroadcast(update);
 
         if (status
                 == PackageInstaller.STATUS_SUCCESS) {
-            KioskPolicy.launchMaatje(
-                    context
+            Intent home =
+                    new Intent(
+                            context,
+                            KioskActivity.class
+                    );
+
+            home.addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK
+                            | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            | Intent.FLAG_ACTIVITY_SINGLE_TOP
             );
+
+            try {
+                context.startActivity(home);
+            } catch (Exception ignored) {}
         }
     }
 }

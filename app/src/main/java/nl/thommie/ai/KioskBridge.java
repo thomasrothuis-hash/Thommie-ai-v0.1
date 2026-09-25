@@ -141,6 +141,9 @@ final class KioskBridge {
         }
 
         String[] items = {
+                "MAATJE updaten via QR",
+                "Timers & wekkers",
+                "Lokale toestelbediening",
                 "Wi-Fi aan",
                 "Wi-Fi uit",
                 "Bluetooth aan",
@@ -159,6 +162,27 @@ final class KioskBridge {
                         (dialog, which) -> {
                             switch (which) {
                                 case 0:
+                                    openUpdateUnlock(
+                                            activity
+                                    );
+                                    break;
+
+                                case 1:
+                                    activity.startActivity(
+                                            new Intent(
+                                                    activity,
+                                                    MaatjeScheduleActivity.class
+                                            )
+                                    );
+                                    break;
+
+                                case 2:
+                                    DeviceControl.showSettings(
+                                            activity
+                                    );
+                                    break;
+
+                                case 3:
                                     sendCommand(
                                             activity,
                                             "wifi_on"
@@ -169,7 +193,7 @@ final class KioskBridge {
                                     );
                                     break;
 
-                                case 1:
+                                case 4:
                                     sendCommand(
                                             activity,
                                             "wifi_off"
@@ -180,7 +204,7 @@ final class KioskBridge {
                                     );
                                     break;
 
-                                case 2:
+                                case 5:
                                     sendCommand(
                                             activity,
                                             "bluetooth_on"
@@ -191,7 +215,7 @@ final class KioskBridge {
                                     );
                                     break;
 
-                                case 3:
+                                case 6:
                                     sendCommand(
                                             activity,
                                             "bluetooth_off"
@@ -202,7 +226,7 @@ final class KioskBridge {
                                     );
                                     break;
 
-                                case 4:
+                                case 7:
                                     sendCommand(
                                             activity,
                                             "location_on"
@@ -213,7 +237,7 @@ final class KioskBridge {
                                     );
                                     break;
 
-                                case 5:
+                                case 8:
                                     sendCommand(
                                             activity,
                                             "location_off"
@@ -224,7 +248,7 @@ final class KioskBridge {
                                     );
                                     break;
 
-                                case 6:
+                                case 9:
                                     openAdminUnlock(
                                             activity
                                     );
@@ -240,6 +264,42 @@ final class KioskBridge {
                         null
                 )
                 .show();
+    }
+
+    private static boolean openUpdateUnlock(
+            Context context
+    ) {
+        if (!isAvailable(context)) {
+            return false;
+        }
+
+        try {
+            Intent intent =
+                    new Intent();
+
+            intent.setComponent(
+                    ADMIN_UNLOCK
+            );
+            intent.putExtra(
+                    "open_update",
+                    true
+            );
+
+            if (!(context instanceof Activity)) {
+                intent.addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK
+                );
+            }
+
+            context.startActivity(
+                    intent
+            );
+
+            return true;
+
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     static boolean openAdminUnlock(

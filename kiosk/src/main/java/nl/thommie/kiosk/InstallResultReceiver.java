@@ -1,7 +1,6 @@
 package nl.thommie.kiosk;
 
 import android.content.BroadcastReceiver;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
@@ -97,31 +96,18 @@ public class InstallResultReceiver
             return;
         }
 
-        String installerPackage =
-                resolvePackage(
-                        context,
-                        confirmation
-                );
-
-        KioskPolicy.allowInstallerTemporarily(
-                context,
-                installerPackage
-        );
-
         broadcastStatus(
                 context,
                 PackageInstaller.STATUS_PENDING_USER_ACTION,
-                "Android-installatiescherm geopend. Bevestig de update op deze OnePlus."
-        );
-
-        confirmation.addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK
-                        | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                "Installatiemodus geopend. Bevestig de update in LineageOS."
         );
 
         try {
             context.startActivity(
-                    confirmation
+                    InstallerBridgeActivity.createIntent(
+                            context,
+                            confirmation
+                    )
             );
         } catch (Exception e) {
             KioskPolicy.restoreLockTaskPackages(
@@ -131,7 +117,7 @@ public class InstallResultReceiver
             broadcastStatus(
                     context,
                     PackageInstaller.STATUS_FAILURE,
-                    "Android-installatiescherm kon niet openen: "
+                    "Installatiemodus kon niet openen: "
                             + safeMessage(e)
             );
 
@@ -139,31 +125,6 @@ public class InstallResultReceiver
                     context
             );
         }
-    }
-
-    private String resolvePackage(
-            Context context,
-            Intent confirmation
-    ) {
-        try {
-            ComponentName component =
-                    confirmation.getComponent();
-
-            if (component != null) {
-                return component.getPackageName();
-            }
-
-            ComponentName resolved =
-                    confirmation.resolveActivity(
-                            context.getPackageManager()
-                    );
-
-            if (resolved != null) {
-                return resolved.getPackageName();
-            }
-        } catch (Exception ignored) {}
-
-        return null;
     }
 
     private void broadcastStatus(

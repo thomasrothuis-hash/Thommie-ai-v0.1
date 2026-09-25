@@ -61,6 +61,11 @@
             android:exported="false" />
 
         <activity
+            android:name=".InstallerBridgeActivity"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+
+        <activity
             android:name=".KioskActivity"
             android:launchMode="singleTask"
             android:screenOrientation="portrait"

@@ -1,6 +1,14 @@
-# MAATJE v1.3.2 OnePlus Edition + MAATJE Kiosk v1.0.3
+# MAATJE v1.3.2 OnePlus Edition + MAATJE Kiosk v1.0.4
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## MAATJE Kiosk v1.0.4 LineageOS installer bridge
+
+- Adds a dedicated InstallerBridgeActivity for LineageOS/AOSP package installation.
+- Temporarily exits Lock Task before opening the system update confirmation.
+- Opens the exact confirmation Intent supplied by PackageInstaller from an Activity context.
+- Keeps the system installer temporarily allowed while maintenance mode is active.
+- Restores the normal Kiosk + MAATJE lock-down after installation or return.
 
 ## MAATJE Kiosk v1.0.3 installer hotfix
 

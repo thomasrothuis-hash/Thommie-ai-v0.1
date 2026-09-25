@@ -285,10 +285,18 @@ final class RealtimeVoiceClient {
     }
 
     void cancelResponse() {
-        if (responseActive.compareAndSet(
-                true,
-                false
-        )) {
+        boolean hadActiveResponse =
+                responseActive.compareAndSet(
+                        true,
+                        false
+                );
+
+        assistantAudioActive.set(false);
+        recentOutputLevel = 0f;
+        lastAssistantAudioMs = 0L;
+        clearBargeInCandidate();
+
+        if (hadActiveResponse) {
             try {
                 send(
                         new JSONObject()
@@ -1176,6 +1184,12 @@ final class RealtimeVoiceClient {
                     track.play();
                 }
 
+                if (generation
+                        != playbackGeneration.get()
+                        || !responseActive.get()) {
+                    return;
+                }
+
                 assistantAudioActive.set(true);
 
                 track.write(
@@ -1185,8 +1199,12 @@ final class RealtimeVoiceClient {
                         AudioTrack.WRITE_BLOCKING
                 );
 
-                lastAssistantAudioMs =
-                        SystemClock.elapsedRealtime();
+                if (generation
+                        == playbackGeneration.get()
+                        && responseActive.get()) {
+                    lastAssistantAudioMs =
+                            SystemClock.elapsedRealtime();
+                }
 
             } catch (Exception ignored) {}
         });
@@ -1514,7 +1532,8 @@ final class RealtimeVoiceClient {
                                     ""
                             );
 
-                    if (!delta.isEmpty()) {
+                    if (!delta.isEmpty()
+                            && responseActive.get()) {
                         playOutputChunk(
                                 Base64.decode(
                                         delta,

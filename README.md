@@ -1,6 +1,15 @@
-# MAATJE v1.2.0
+# MAATJE v1.2.1
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## v1.2.1 manual stop hotfix
+
+- Adds a dedicated STOP button to both the main MAATJE screen and the assistant overlay.
+- STOP cancels only the current realtime answer; it does not close the realtime session.
+- Flushes buffered AudioTrack output immediately so MAATJE stops speaking right away.
+- Re-enables microphone input immediately after a manual stop instead of waiting for the normal echo cooldown.
+- Ignores late audio deltas from a canceled response so speech cannot restart after pressing STOP.
+- Keeps camera vision, internet search, waveform and realtime voice session active so the user can immediately ask a new question.
 
 ## v1.2.0 live camera vision
 
@@ -211,4 +220,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v1.2.0.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v1.2.1.apk` as a workflow artifact.

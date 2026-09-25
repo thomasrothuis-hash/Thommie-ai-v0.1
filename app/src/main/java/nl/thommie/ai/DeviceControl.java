@@ -194,7 +194,7 @@ final class DeviceControl {
         AlertDialog dialog =
                 new AlertDialog.Builder(activity)
                         .setTitle(
-                                "MAATJE v1.2.0 – Toestelbediening"
+                                "MAATJE v1.2.1 – Toestelbediening"
                         )
                         .setMessage(message)
                         .setPositiveButton(

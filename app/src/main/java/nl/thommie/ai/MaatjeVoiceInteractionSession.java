@@ -78,6 +78,7 @@ final class MaatjeVoiceInteractionSession
     private TextView answerText;
     private TextView footerText;
     private Button micButton;
+    private Button stopResponseButton;
 
     private boolean listening = false;
     private boolean thinking = false;
@@ -299,6 +300,44 @@ final class MaatjeVoiceInteractionSession
                         dp(46),
                         dp(40)
                 )
+        );
+
+        stopResponseButton =
+                new Button(context);
+
+        stopResponseButton.setAllCaps(false);
+        stopResponseButton.setText("STOP");
+        stopResponseButton.setTextSize(9);
+        stopResponseButton.setTypeface(
+                Typeface.create(
+                        Typeface.MONOSPACE,
+                        Typeface.BOLD
+                )
+        );
+        stopResponseButton.setTextColor(GREEN);
+        stopResponseButton.setBackground(
+                roundRect(
+                        BG,
+                        16,
+                        BORDER
+                )
+        );
+        stopResponseButton.setEnabled(false);
+        stopResponseButton.setAlpha(.35f);
+        stopResponseButton.setOnClickListener(
+                v -> interruptRealtimeAnswer()
+        );
+
+        LinearLayout.LayoutParams stopLp =
+                new LinearLayout.LayoutParams(
+                        dp(52),
+                        dp(40)
+                );
+        stopLp.leftMargin = dp(4);
+
+        header.addView(
+                stopResponseButton,
+                stopLp
         );
 
         TextView close =
@@ -947,6 +986,9 @@ final class MaatjeVoiceInteractionSession
 
                                     speaking = active;
                                     thinking = false;
+                                    setStopResponseEnabled(
+                                            active
+                                    );
 
                                     if (active) {
                                         setStatus(
@@ -1333,6 +1375,7 @@ final class MaatjeVoiceInteractionSession
                 realtimeVoiceClient;
         realtimeVoiceClient = null;
         realtimeConnected = false;
+        setStopResponseEnabled(false);
 
         if (client != null) {
             client.shutdown();
@@ -2618,6 +2661,46 @@ final class MaatjeVoiceInteractionSession
     ) {
         if (statusText != null) {
             statusText.setText(value);
+        }
+    }
+
+    private void setStopResponseEnabled(
+            boolean enabled
+    ) {
+        if (stopResponseButton == null) {
+            return;
+        }
+
+        stopResponseButton.setEnabled(enabled);
+        stopResponseButton.setAlpha(
+                enabled ? 1f : .35f
+        );
+    }
+
+    private void interruptRealtimeAnswer() {
+        RealtimeVoiceClient client =
+                realtimeVoiceClient;
+
+        if (client == null
+                || !client.isRunning()) {
+            setStopResponseEnabled(false);
+            return;
+        }
+
+        client.cancelResponse();
+        speaking = false;
+        thinking = false;
+        listening = false;
+        setStopResponseEnabled(false);
+
+        setStatus(
+                "LISTENING • REALTIME"
+        );
+
+        if (waveformView != null) {
+            waveformView.setMode(
+                    AudioWaveformView.MODE_IDLE
+            );
         }
     }
 

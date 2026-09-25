@@ -76,6 +76,7 @@ public class MainActivity extends Activity {
     private TextView cameraStatusText;
     private Button cameraButton;
     private Button cameraSwitchButton;
+    private Button stopResponseButton;
     private boolean realtimeConnected = false;
     private boolean realtimeAssistantSpeaking = false;
     private Button sendButton;
@@ -324,7 +325,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v1.2.0  •  PERSONAL AI TERMINAL"
+                "v1.2.1  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -556,7 +557,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v1.2.0 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v1.2.1 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -653,6 +654,35 @@ public class MainActivity extends Activity {
         composer.addView(
                 cameraButton,
                 cameraButtonLp
+        );
+
+        stopResponseButton = button(
+                "STOP",
+                PANEL,
+                MINT
+        );
+        stopResponseButton.setTextSize(10);
+        stopResponseButton.setTypeface(
+                Typeface.create(
+                        Typeface.MONOSPACE,
+                        Typeface.BOLD
+                )
+        );
+        stopResponseButton.setEnabled(false);
+        stopResponseButton.setAlpha(.35f);
+        stopResponseButton.setOnClickListener(
+                v -> interruptRealtimeAnswer()
+        );
+
+        LinearLayout.LayoutParams stopResponseLp =
+                new LinearLayout.LayoutParams(
+                        dp(54),
+                        dp(58)
+                );
+        stopResponseLp.leftMargin = dp(8);
+        composer.addView(
+                stopResponseButton,
+                stopResponseLp
         );
 
         input = new EditText(this);
@@ -1563,6 +1593,50 @@ public class MainActivity extends Activity {
         return false;
     }
 
+    private void setStopResponseEnabled(
+            boolean enabled
+    ) {
+        if (stopResponseButton == null) {
+            return;
+        }
+
+        stopResponseButton.setEnabled(enabled);
+        stopResponseButton.setAlpha(
+                enabled ? 1f : .35f
+        );
+    }
+
+    private void interruptRealtimeAnswer() {
+        RealtimeVoiceClient client =
+                realtimeVoiceClient;
+
+        if (client == null
+                || !client.isRunning()) {
+            setStopResponseEnabled(false);
+            return;
+        }
+
+        cameraQuestionPending = false;
+        client.cancelResponse();
+
+        realtimeAssistantSpeaking = false;
+        setStopResponseEnabled(false);
+
+        if (stateText != null) {
+            stateText.setText(
+                    cameraVisionActive
+                            ? "CAMERA LIVE • LISTENING"
+                            : "LISTENING • REALTIME"
+            );
+        }
+
+        if (waveformView != null) {
+            waveformView.setMode(
+                    AudioWaveformView.MODE_USER
+            );
+        }
+    }
+
     private void toggleRealtimeVoice() {
         if (realtimeVoiceClient != null
                 && realtimeVoiceClient.isRunning()) {
@@ -1628,6 +1702,7 @@ public class MainActivity extends Activity {
                             public void onConnected() {
                                 runOnUiThread(() -> {
                                     realtimeConnected = true;
+                                    setStopResponseEnabled(false);
                                     stateText.setText(
                                             "LISTENING • REALTIME"
                                     );
@@ -1648,6 +1723,7 @@ public class MainActivity extends Activity {
                                 runOnUiThread(() -> {
                                     realtimeConnected = false;
                                     realtimeAssistantSpeaking = false;
+                                    setStopResponseEnabled(false);
                                     stateText.setText(
                                             "REALTIME • DISCONNECTED"
                                     );
@@ -1768,6 +1844,9 @@ public class MainActivity extends Activity {
                                 runOnUiThread(() -> {
                                     realtimeAssistantSpeaking =
                                             speaking;
+                                    setStopResponseEnabled(
+                                            speaking
+                                    );
 
                                     if (speaking) {
                                         stateText.setText(
@@ -1830,6 +1909,7 @@ public class MainActivity extends Activity {
         realtimeVoiceClient = null;
         realtimeConnected = false;
         realtimeAssistantSpeaking = false;
+        setStopResponseEnabled(false);
 
         if (client != null) {
             client.shutdown();
@@ -2282,7 +2362,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v1.2.0 – Instellingen"
+                        "MAATJE v1.2.1 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -2407,7 +2487,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.2.0 – Geheugen"
+                                "MAATJE v1.2.1 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -2497,7 +2577,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.2.0 – API"
+                                "MAATJE v1.2.1 – API"
                         )
                         .setView(box)
                         .setPositiveButton(

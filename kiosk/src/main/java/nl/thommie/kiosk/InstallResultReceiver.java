@@ -102,12 +102,13 @@ public class InstallResultReceiver
                 "Installatiemodus geopend. Bevestig de update in LineageOS."
         );
 
+        confirmation.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK
+        );
+
         try {
             context.startActivity(
-                    InstallerBridgeActivity.createIntent(
-                            context,
-                            confirmation
-                    )
+                    confirmation
             );
         } catch (Exception e) {
             KioskPolicy.restoreLockTaskPackages(

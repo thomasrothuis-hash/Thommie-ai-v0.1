@@ -1,6 +1,19 @@
-# MAATJE v0.9.3.1
+# MAATJE v0.9.4
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## v0.9.4 features
+
+- Replaces fullscreen assistant launching with a native VoiceInteractionSession overlay.
+- Keeps the foreground app visible behind a compact bottom assistant panel.
+- Overlay states: LISTENING, PROCESSING SPEECH, THINKING, PREPARING VOICE, SPEAKING and READY.
+- Live partial speech transcript plus final user query and assistant answer.
+- Reuses the encrypted API key, OpenAI conversation, profile memory, personality, web-search setting and token tracking.
+- Cloud TTS plays directly from the assistant overlay and the overlay auto-closes after the response.
+- Local overlay actions preserve flashlight, volume, brightness, battery, timers, alarms, camera, Wi-Fi/Bluetooth settings and opening apps.
+- Background Vosk wake listening hands microphone ownership to the overlay while the session is visible.
+- SessionService now shares the main app process so wake/session microphone coordination is deterministic.
+- Requests Android assist context as a foundation for future screen-aware commands such as asking what is currently shown.
 
 ## v0.9.3.1 hotfix
 
@@ -103,4 +116,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v0.9.3.1.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v0.9.4.apk` as a workflow artifact.

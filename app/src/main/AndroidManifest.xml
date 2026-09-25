@@ -61,7 +61,6 @@
         <service
             android:name=".MaatjeVoiceInteractionSessionService"
             android:permission="android.permission.BIND_VOICE_INTERACTION"
-            android:process=":assistant_session"
             android:exported="true" />
 
         <service

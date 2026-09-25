@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.service.voice.VoiceInteractionService;
+import android.service.voice.VoiceInteractionSession;
 
 public class MaatjeVoiceInteractionService
         extends VoiceInteractionService {
@@ -18,6 +19,9 @@ public class MaatjeVoiceInteractionService
 
     private static volatile
     boolean activityVisible = false;
+
+    private static volatile
+    boolean sessionVisible = false;
 
     private final Handler handler =
             new Handler(
@@ -100,18 +104,21 @@ public class MaatjeVoiceInteractionService
             boolean visible
     ) {
         activityVisible = visible;
+        refreshInstance();
+    }
 
-        MaatjeVoiceInteractionService
-                service = instance;
-
-        if (service != null) {
-            service.handler.post(
-                    service::refreshWake
-            );
-        }
+    static void setSessionVisible(
+            boolean visible
+    ) {
+        sessionVisible = visible;
+        refreshInstance();
     }
 
     static void refreshFromActivity() {
+        refreshInstance();
+    }
+
+    private static void refreshInstance() {
         MaatjeVoiceInteractionService
                 service = instance;
 
@@ -123,16 +130,13 @@ public class MaatjeVoiceInteractionService
     }
 
     private void refreshWake() {
-        handler.removeCallbacks(
-                this::refreshWake
-        );
-
         if (backgroundWakeWord == null) {
             return;
         }
 
         boolean shouldListen =
                 !activityVisible
+                        && !sessionVisible
                         && WakeWordSettings.enabled(
                                 this
                         )
@@ -161,9 +165,13 @@ public class MaatjeVoiceInteractionService
     }
 
     private void onWakeDetected() {
-        if (activityVisible) {
+        if (activityVisible
+                || sessionVisible) {
             return;
         }
+
+        sessionVisible = true;
+        stopWake();
 
         Bundle args =
                 new Bundle();
@@ -176,42 +184,13 @@ public class MaatjeVoiceInteractionService
         try {
             showSession(
                     args,
-                    0
+                    VoiceInteractionSession
+                            .SHOW_WITH_ASSIST
             );
+
         } catch (Exception ignored) {
-            launchMainFallback();
+            sessionVisible = false;
+            refreshWake();
         }
-
-        handler.postDelayed(
-                this::refreshWake,
-                2500L
-        );
-    }
-
-    private void launchMainFallback() {
-        try {
-            android.content.Intent intent =
-                    new android.content.Intent(
-                            this,
-                            MainActivity.class
-                    );
-
-            intent.addFlags(
-                    android.content.Intent
-                            .FLAG_ACTIVITY_NEW_TASK
-                            | android.content.Intent
-                            .FLAG_ACTIVITY_CLEAR_TOP
-                            | android.content.Intent
-                            .FLAG_ACTIVITY_SINGLE_TOP
-            );
-
-            intent.putExtra(
-                    MainActivity
-                            .EXTRA_ASSISTANT_INVOCATION,
-                    true
-            );
-
-            startActivity(intent);
-        } catch (Exception ignored) {}
     }
 }

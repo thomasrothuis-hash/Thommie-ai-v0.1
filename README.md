@@ -1,6 +1,14 @@
-# MAATJE v1.3.2 OnePlus Edition + MAATJE Kiosk v1.0.5
+# MAATJE v1.3.2 OnePlus Edition + MAATJE Kiosk v1.0.6
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## MAATJE Kiosk v1.0.6 normal installer route
+
+- QR updates no longer use PackageInstaller.Session.
+- Kiosk still validates the uploaded APK package name and signing certificate first.
+- The validated APK is shared through a private FileProvider to the normal LineageOS Android package installer.
+- This follows the same user-facing install path as manually opening an APK, including any Play Protect warning and explicit Install anyway flow.
+- Kiosk polls the actually installed MAATJE version and re-locks only after the expected version is present.
 
 ## MAATJE Kiosk v1.0.5 verifier-safe LineageOS update flow
 

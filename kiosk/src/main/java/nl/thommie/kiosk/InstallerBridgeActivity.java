@@ -3,7 +3,9 @@ package nl.thommie.kiosk;
 import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -13,11 +15,17 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import androidx.core.content.FileProvider;
+
+import java.io.File;
+
 public class InstallerBridgeActivity
         extends Activity {
 
-    private static final String EXTRA_CONFIRMATION =
-            "confirmation_intent";
+    private static final String EXTRA_APK_PATH =
+            "apk_path";
+    private static final String EXTRA_EXPECTED_VERSION =
+            "expected_version";
 
     private static final int BG =
             Color.rgb(4, 8, 5);
@@ -38,9 +46,10 @@ public class InstallerBridgeActivity
                     Looper.getMainLooper()
             );
 
-    static Intent createIntent(
+    static Intent createFileInstallIntent(
             android.content.Context context,
-            Intent confirmation
+            File apk,
+            String expectedVersion
     ) {
         Intent intent =
                 new Intent(
@@ -49,8 +58,12 @@ public class InstallerBridgeActivity
                 );
 
         intent.putExtra(
-                EXTRA_CONFIRMATION,
-                confirmation
+                EXTRA_APK_PATH,
+                apk.getAbsolutePath()
+        );
+        intent.putExtra(
+                EXTRA_EXPECTED_VERSION,
+                expectedVersion
         );
 
         intent.addFlags(
@@ -89,70 +102,21 @@ public class InstallerBridgeActivity
                     this
             );
 
-            Intent confirmation =
-                    getConfirmationIntent();
-
-            if (confirmation == null) {
-                statusView.setText(
-                        "Geen geldig Android-installatiescherm ontvangen."
-                );
-                return;
-            }
-
-            String installerPackage =
-                    resolvePackage(
-                            confirmation
-                    );
-
-            KioskPolicy.allowInstallerTemporarily(
-                    this,
-                    installerPackage
-            );
-
-            confirmation.addFlags(
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP
-            );
-
-            statusView.setText(
-                    "Android-installatie wordt geopend...\n\n"
-                            + "Rond ALLE bevestigingen af, ook een eventuele "
-                            + "\"onveilige app / toch installeren\" melding."
-            );
-
             handler.postDelayed(
-                    () -> {
-                        try {
-                            startActivity(
-                                    confirmation
-                            );
-                        } catch (Exception e) {
-                            statusView.setText(
-                                    "Android-installatiescherm kon niet openen.\n\n"
-                                            + safeMessage(e)
-                            );
-                        }
-                    },
-                    250L
+                    this::openNormalAndroidInstaller,
+                    300L
             );
 
             return;
         }
 
-        /*
-         * Belangrijk voor LineageOS:
-         * hier NIET automatisch opnieuw Lock Task starten.
-         *
-         * De Package Installer / verifier kan meerdere systeemschermen
-         * achter elkaar tonen. InstallResultReceiver herstelt de kiosk
-         * pas nadat Android definitief SUCCESS of FAILURE meldt.
-         */
         statusView.setText(
-                "INSTALLATIE NOG BEZIG\n\n"
-                        + "Rond alle Android-bevestigingen af. "
-                        + "MAATJE wacht op het definitieve installatieresultaat.\n\n"
-                        + "Heb je de installatie zelf geannuleerd en gebeurt er niets meer? "
-                        + "Gebruik dan alleen de herstelknop hieronder."
+                "WACHTEN OP INSTALLATIE\n\n"
+                        + "Rond alle Android- en Play Protect-bevestigingen af.\n\n"
+                        + "MAATJE controleert zelf wanneer de nieuwe versie echt geïnstalleerd is."
         );
+
+        startVersionPolling();
     }
 
     @Override
@@ -164,6 +128,221 @@ public class InstallerBridgeActivity
                 launched
         );
         super.onSaveInstanceState(outState);
+    }
+
+    private void openNormalAndroidInstaller() {
+        String path =
+                getIntent().getStringExtra(
+                        EXTRA_APK_PATH
+                );
+
+        if (path == null
+                || path.trim().isEmpty()) {
+            statusView.setText(
+                    "APK-pad ontbreekt."
+            );
+            return;
+        }
+
+        File apk =
+                new File(path);
+
+        if (!apk.isFile()) {
+            statusView.setText(
+                    "Update-APK bestaat niet meer."
+            );
+            return;
+        }
+
+        try {
+            Uri uri =
+                    FileProvider.getUriForFile(
+                            this,
+                            getPackageName()
+                                    + ".files",
+                            apk
+                    );
+
+            Intent install =
+                    new Intent(
+                            Intent.ACTION_VIEW
+                    );
+
+            install.setDataAndType(
+                    uri,
+                    "application/vnd.android.package-archive"
+            );
+
+            install.addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            | Intent.FLAG_ACTIVITY_CLEAR_TOP
+            );
+
+            ComponentName resolved =
+                    install.resolveActivity(
+                            getPackageManager()
+                    );
+
+            String installerPackage =
+                    resolved == null
+                            ? null
+                            : resolved.getPackageName();
+
+            KioskPolicy.allowInstallerTemporarily(
+                    this,
+                    installerPackage
+            );
+
+            if (installerPackage != null) {
+                try {
+                    grantUriPermission(
+                            installerPackage,
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    );
+                } catch (Exception ignored) {}
+            }
+
+            statusView.setText(
+                    "Normale LineageOS-installer wordt geopend...\n\n"
+                            + "Druk op Update en kies daarna eventueel "
+                            + "\"Toch installeren\" bij de beveiligingswaarschuwing."
+            );
+
+            startActivity(
+                    install
+            );
+
+        } catch (Exception e) {
+            statusView.setText(
+                    "Android-installer kon niet openen.\n\n"
+                            + safeMessage(e)
+            );
+        }
+    }
+
+    private void startVersionPolling() {
+        handler.removeCallbacksAndMessages(
+                null
+        );
+
+        handler.post(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        if (isExpectedVersionInstalled()) {
+                            statusView.setText(
+                                    "UPDATE GELUKT\n\n"
+                                            + "Nieuwe MAATJE-versie gedetecteerd. Kiosk wordt opnieuw vergrendeld."
+                            );
+
+                            handler.postDelayed(
+                                    InstallerBridgeActivity.this
+                                            ::finishSuccessfully,
+                                    700L
+                            );
+                            return;
+                        }
+
+                        handler.postDelayed(
+                                this,
+                                1000L
+                        );
+                    }
+                }
+        );
+    }
+
+    private boolean isExpectedVersionInstalled() {
+        String expected =
+                getIntent().getStringExtra(
+                        EXTRA_EXPECTED_VERSION
+                );
+
+        if (expected == null
+                || expected.trim().isEmpty()) {
+            return false;
+        }
+
+        try {
+            PackageInfo info;
+
+            if (Build.VERSION.SDK_INT >= 33) {
+                info =
+                        getPackageManager()
+                                .getPackageInfo(
+                                        KioskPolicy.MAATJE_PACKAGE,
+                                        android.content.pm.PackageManager
+                                                .PackageInfoFlags
+                                                .of(0)
+                                );
+            } else {
+                info =
+                        getPackageManager()
+                                .getPackageInfo(
+                                        KioskPolicy.MAATJE_PACKAGE,
+                                        0
+                                );
+            }
+
+            return info != null
+                    && expected.equals(
+                    info.versionName
+            );
+
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private void finishSuccessfully() {
+        KioskPolicy.restoreLockTaskPackages(
+                this
+        );
+
+        Intent home =
+                new Intent(
+                        this,
+                        KioskActivity.class
+                );
+
+        home.addFlags(
+                Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP
+        );
+
+        try {
+            startActivity(home);
+        } catch (Exception ignored) {}
+
+        finish();
+    }
+
+    private void restoreKioskManually() {
+        handler.removeCallbacksAndMessages(
+                null
+        );
+
+        KioskPolicy.restoreLockTaskPackages(
+                this
+        );
+
+        Intent home =
+                new Intent(
+                        this,
+                        KioskActivity.class
+                );
+
+        home.addFlags(
+                Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP
+        );
+
+        try {
+            startActivity(home);
+        } catch (Exception ignored) {}
+
+        finish();
     }
 
     private void buildUi() {
@@ -200,7 +379,7 @@ public class InstallerBridgeActivity
                 new TextView(this);
 
         statusView.setText(
-                "Installatie voorbereiden..."
+                "Normale Android-installatie voorbereiden..."
         );
         statusView.setTextColor(TEXT);
         statusView.setTextSize(14f);
@@ -239,7 +418,7 @@ public class InstallerBridgeActivity
                 new TextView(this);
 
         note.setText(
-                "Gebruik deze knop alleen als je Androids installatie bewust hebt geannuleerd."
+                "Gebruik deze knop alleen als je de Android-installatie bewust hebt geannuleerd."
         );
         note.setTextColor(MUTED);
         note.setTextSize(11f);
@@ -254,74 +433,6 @@ public class InstallerBridgeActivity
         root.addView(note);
 
         setContentView(root);
-    }
-
-    private Intent getConfirmationIntent() {
-        Intent source =
-                getIntent();
-
-        if (source == null) {
-            return null;
-        }
-
-        if (Build.VERSION.SDK_INT >= 33) {
-            return source.getParcelableExtra(
-                    EXTRA_CONFIRMATION,
-                    Intent.class
-            );
-        }
-
-        return source.getParcelableExtra(
-                EXTRA_CONFIRMATION
-        );
-    }
-
-    private String resolvePackage(
-            Intent confirmation
-    ) {
-        try {
-            ComponentName component =
-                    confirmation.getComponent();
-
-            if (component != null) {
-                return component.getPackageName();
-            }
-
-            ComponentName resolved =
-                    confirmation.resolveActivity(
-                            getPackageManager()
-                    );
-
-            return resolved == null
-                    ? null
-                    : resolved.getPackageName();
-
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    private void restoreKioskManually() {
-        KioskPolicy.restoreLockTaskPackages(
-                this
-        );
-
-        Intent home =
-                new Intent(
-                        this,
-                        KioskActivity.class
-                );
-
-        home.addFlags(
-                Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        | Intent.FLAG_ACTIVITY_SINGLE_TOP
-        );
-
-        try {
-            startActivity(home);
-        } catch (Exception ignored) {}
-
-        finish();
     }
 
     private String safeMessage(

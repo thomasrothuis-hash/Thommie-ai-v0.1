@@ -84,6 +84,28 @@ final class ApkInstaller {
                 : archive.versionName;
     }
 
+    static void launchManualMaatjeInstall(
+            Context context,
+            File apk,
+            String expectedVersion
+    ) throws Exception {
+        validateMaatjeApk(
+                context,
+                apk
+        );
+
+        Intent bridge =
+                InstallerBridgeActivity.createFileInstallIntent(
+                        context,
+                        apk,
+                        expectedVersion
+                );
+
+        context.startActivity(
+                bridge
+        );
+    }
+
     static void installMaatje(
             Context context,
             File apk

@@ -70,7 +70,7 @@ final class OpenAiClient {
         JSONObject body = new JSONObject();
         JSONObject metadata = new JSONObject();
         metadata.put("app", "MAATJE");
-        metadata.put("version", "0.9.5");
+        metadata.put("version", "0.9.5.1");
         body.put("metadata", metadata);
 
         writeJson(conn, body);
@@ -211,13 +211,16 @@ final class OpenAiClient {
                 + "Zeg nooit dat je humor, sarcasme, droogheid, enthousiasme, mood of scheldniveau hebt aangepast "
                 + "tenzij de Android-app het commando lokaal heeft afgehandeld voordat deze request werd verstuurd. "
                 + "Als een wijzigingsverzoek toch bij jou terechtkomt, zeg kort dat het lokale commando niet herkend is "
-                + "in plaats van te doen alsof de instelling gewijzigd is.";
+                + "in plaats van te doen alsof de instelling gewijzigd is. "
+                + "Gebruik gewone platte tekst zonder Markdown-opmaak. Gebruik geen dubbele sterretjes, enkele sterretjes, underscores, headings of backticks voor opmaak. "
+                + "Formuleer antwoorden in duidelijke, natuurlijke Nederlandse zinnen. Gebruik alleen een opsomming als de gebruiker daar expliciet om vraagt of als dat echt veel duidelijker is.";
 
         if (imageDataUrl != null
                 && !imageDataUrl.trim().isEmpty()) {
             instructions +=
                     " Je ontvangt bij deze vraag één screenshot van het scherm dat zichtbaar was toen MAATJE werd geopend. "
                     + "Gebruik daadwerkelijk de zichtbare inhoud van die screenshot om de vraag te beantwoorden. "
+                    + "Beschrijf wat je ziet bij voorkeur als een paar korte, natuurlijke lopende zinnen in plaats van een lijst. "
                     + "Noem onzekerheid als tekst of details niet goed leesbaar zijn en verzin geen elementen die niet zichtbaar zijn.";
         }
 

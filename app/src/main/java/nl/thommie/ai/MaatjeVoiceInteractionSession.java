@@ -1341,9 +1341,14 @@ final class MaatjeVoiceInteractionSession
 
                     thinking = false;
 
+                    String cleanedReply =
+                            cleanAssistantText(
+                                    reply.text
+                            );
+
                     if (answerText != null) {
                         answerText.setText(
-                                reply.text
+                                cleanedReply
                         );
                     }
 
@@ -1366,7 +1371,7 @@ final class MaatjeVoiceInteractionSession
                     }
 
                     speakOrFinish(
-                            reply.text
+                            cleanedReply
                     );
                 });
 
@@ -1512,6 +1517,29 @@ final class MaatjeVoiceInteractionSession
                 && !screenshot.isRecycled()) {
             screenshot.recycle();
         }
+    }
+
+    private String cleanAssistantText(
+            String text
+    ) {
+        if (text == null) {
+            return "";
+        }
+
+        return text
+                .replace("**", "")
+                .replace("__", "")
+                .replace("`", "")
+                .replace("*", "")
+                .replaceAll(
+                        "(?m)^\\s*#{1,6}\\s*",
+                        ""
+                )
+                .replaceAll(
+                        "\\n{3,}",
+                        "\\n\\n"
+                )
+                .trim();
     }
 
     private void showLocalAnswer(

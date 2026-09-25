@@ -1,6 +1,13 @@
-# MAATJE v0.9.5
+# MAATJE v0.9.5.1
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## v0.9.5.1 fixes
+
+- Removes visible Markdown markers such as **, *, backticks and heading markers from overlay answers.
+- Instructs MAATJE to answer in plain text by default.
+- Screen descriptions now prefer short, natural Dutch sentences instead of Markdown-style lists.
+- Keeps a local text-cleanup fallback in the assistant overlay if the model still returns formatting markers.
 
 ## v0.9.5 features
 
@@ -135,4 +142,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v0.9.5.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v0.9.5.1.apk` as a workflow artifact.

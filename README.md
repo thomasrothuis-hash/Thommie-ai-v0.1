@@ -1,6 +1,14 @@
-# MAATJE v1.1.1
+# MAATJE v1.1.2
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## v1.1.2 realtime main-screen and hard echo lock
+
+- Adds the live realtime voice session and PCM equalizer directly to the main app screen.
+- Starts realtime mode from the microphone button, wake word, and default-assistant invocation.
+- Fully blocks microphone upload while MAATJE is responding and for a 900 ms echo cooldown afterwards.
+- Keeps the speaking state active until all queued PCM audio has actually finished playing.
+- Uses the permanent release-signing pipeline so v1.1.2 installs over v1.1.1 without clearing local data.
 
 ## v1.1.1 realtime echo / self-interrupt fix
 
@@ -178,4 +186,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v1.1.1.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v1.1.2.apk` as a workflow artifact.

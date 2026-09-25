@@ -688,64 +688,17 @@ final class RealtimeVoiceClient {
         long now =
                 SystemClock.elapsedRealtime();
 
-        float micLevel =
-                rmsShorts(
-                        samples,
-                        length
-                );
-
-        recentOutputLevel *= 0.93f;
-
         boolean assistantWindow =
                 responseActive.get()
                         || assistantAudioActive.get()
-                        || now - lastAssistantAudioMs < 550L;
+                        || now - lastAssistantAudioMs < 900L;
 
-        if (!assistantWindow) {
-            clearBargeInCandidate();
-            sendInputPcm(pcm);
-            return;
-        }
-
-        float triggerLevel =
-                Math.max(
-                        0.045f,
-                        recentOutputLevel * 1.45f
-                                + 0.010f
-                );
-
-        if (micLevel > triggerLevel) {
-            bargeInCandidateChunks++;
-
-            bargeInBuffer.addLast(
-                    pcm.clone()
-            );
-
-            while (bargeInBuffer.size() > 5) {
-                bargeInBuffer.removeFirst();
-            }
-        } else {
+        if (assistantWindow) {
             clearBargeInCandidate();
             return;
         }
 
-        if (bargeInCandidateChunks < 4) {
-            return;
-        }
-
-        assistantAudioActive.set(false);
-        lastAssistantAudioMs = 0L;
-        recentOutputLevel = 0f;
-
-        cancelResponse();
-
-        while (!bargeInBuffer.isEmpty()) {
-            sendInputPcm(
-                    bargeInBuffer.removeFirst()
-            );
-        }
-
-        bargeInCandidateChunks = 0;
+        sendInputPcm(pcm);
     }
 
     private void clearBargeInCandidate() {
@@ -914,18 +867,6 @@ final class RealtimeVoiceClient {
             return;
         }
 
-        float outputLevel =
-                rmsPcm16(pcm);
-
-        recentOutputLevel =
-                Math.max(
-                        outputLevel,
-                        recentOutputLevel * 0.82f
-                );
-        lastAssistantAudioMs =
-                SystemClock.elapsedRealtime();
-        assistantAudioActive.set(true);
-
         listener.onAssistantPcm(pcm);
 
         int generation =
@@ -953,12 +894,17 @@ final class RealtimeVoiceClient {
                     track.play();
                 }
 
+                assistantAudioActive.set(true);
+
                 track.write(
                         pcm,
                         0,
                         pcm.length,
                         AudioTrack.WRITE_BLOCKING
                 );
+
+                lastAssistantAudioMs =
+                        SystemClock.elapsedRealtime();
 
             } catch (Exception ignored) {}
         });
@@ -1111,11 +1057,25 @@ final class RealtimeVoiceClient {
                     break;
                 }
 
-                case "response.done":
-                    responseActive.set(false);
-                    assistantAudioActive.set(false);
-                    listener.onAssistantSpeaking(false);
+                case "response.done": {
+                    int generation =
+                            playbackGeneration.get();
+
+                    playbackExecutor.submit(() -> {
+                        if (!running.get()
+                                || generation
+                                != playbackGeneration.get()) {
+                            return;
+                        }
+
+                        responseActive.set(false);
+                        assistantAudioActive.set(false);
+                        lastAssistantAudioMs =
+                                SystemClock.elapsedRealtime();
+                        listener.onAssistantSpeaking(false);
+                    });
                     break;
+                }
 
                 case "error": {
                     JSONObject error =

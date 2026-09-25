@@ -90,7 +90,7 @@ final class WakeWordSettings {
 
         TextView info = new TextView(activity);
         info.setText(
-                "\nMAATJE gebruikt in v1.1.1 een beperkte offline Nederlandse "
+                "\nMAATJE gebruikt in v1.1.2 een beperkte offline Nederlandse "
                         + "Vosk-woordenlijst voor het wake word.\n\n"
                         + "Aanbevolen startpunt: 70–80%.\n"
                         + "Hoger = makkelijker wakker, maar iets meer kans op foutieve activatie.\n"
@@ -100,7 +100,7 @@ final class WakeWordSettings {
         box.addView(info);
 
         new AlertDialog.Builder(activity)
-                .setTitle("MAATJE v1.1.1 – Wake word")
+                .setTitle("MAATJE v1.1.2 – Wake word")
                 .setView(box)
                 .setPositiveButton(
                         "Opslaan",

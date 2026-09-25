@@ -62,6 +62,10 @@ public class MainActivity extends Activity {
     private TextView transcript;
     private EditText input;
     private Button micButton;
+    private AudioWaveformView waveformView;
+    private RealtimeVoiceClient realtimeVoiceClient;
+    private boolean realtimeConnected = false;
+    private boolean realtimeAssistantSpeaking = false;
     private Button sendButton;
     private Button replayButton;
     private SpeechRecognizer speechRecognizer;
@@ -149,7 +153,7 @@ public class MainActivity extends Activity {
 
                                 mainHandler.postDelayed(
                                         MainActivity.this
-                                                ::startCommandListeningInternal,
+                                                ::startRealtimeVoice,
                                         350
                                 );
                             }
@@ -222,7 +226,7 @@ public class MainActivity extends Activity {
             pendingAssistantInvocation = false;
 
             mainHandler.postDelayed(
-                    this::startListening,
+                    this::startRealtimeVoice,
                     300L
             );
         }
@@ -272,7 +276,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v1.1.1  •  PERSONAL AI TERMINAL"
+                "v1.1.2  •  PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -307,6 +311,17 @@ public class MainActivity extends Activity {
         );
         stateText.setLetterSpacing(.20f);
         root.addView(stateText);
+
+        waveformView = new AudioWaveformView(this);
+        waveformView.setMode(AudioWaveformView.MODE_IDLE);
+        LinearLayout.LayoutParams waveformLp =
+                new LinearLayout.LayoutParams(
+                        -1,
+                        dp(58)
+                );
+        waveformLp.topMargin = dp(8);
+        waveformLp.bottomMargin = dp(4);
+        root.addView(waveformView, waveformLp);
 
         wakeDebugText = new TextView(this);
         wakeDebugText.setGravity(Gravity.CENTER);
@@ -349,7 +364,7 @@ public class MainActivity extends Activity {
         transcript = new TextView(this);
         transcript.setText(
                 "Welkom.\n\n"
-                        + "MAATJE v1.1.1 gebruikt OpenAI cloud voice, "
+                        + "MAATJE v1.1.2 gebruikt OpenAI cloud voice, "
                         + "blijvend gespreksgeheugen, lokaal profielgeheugen en lokale \"Hey Maatje\" activatie."
         );
         transcript.setTextColor(TEXT);
@@ -412,7 +427,7 @@ public class MainActivity extends Activity {
 
         micButton = button("🎙", PANEL, MINT);
         micButton.setOnClickListener(
-                v -> startListening()
+                v -> toggleRealtimeVoice()
         );
         composer.addView(
                 micButton,
@@ -1013,6 +1028,304 @@ public class MainActivity extends Activity {
         );
     }
 
+    private void toggleRealtimeVoice() {
+        if (realtimeVoiceClient != null
+                && realtimeVoiceClient.isRunning()) {
+            stopRealtimeVoice();
+            stateText.setText("READY");
+            scheduleWakeListening(400L);
+        } else {
+            startRealtimeVoice();
+        }
+    }
+
+    private void startRealtimeVoice() {
+        if (!appVisible) {
+            return;
+        }
+
+        if (checkSelfPermission(
+                Manifest.permission.RECORD_AUDIO
+        ) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                    new String[]{
+                            Manifest.permission.RECORD_AUDIO
+                    },
+                    REQ_AUDIO
+            );
+            Toast.makeText(
+                    this,
+                    "Geef MAATJE microfoontoegang en tik daarna opnieuw op de microfoon.",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+
+        String apiKey =
+                SecurePrefs.loadApiKey(this);
+
+        if (apiKey.isEmpty()) {
+            showApiKeyDialog(true);
+            return;
+        }
+
+        stopRecognitionSession();
+
+        if (offlineWakeWord != null) {
+            offlineWakeWord.stop();
+        }
+
+        stopRealtimeVoice();
+
+        realtimeConnected = false;
+        realtimeAssistantSpeaking = false;
+        stateText.setText("CONNECTING • REALTIME");
+        micButton.setText("■");
+        waveformView.setMode(
+                AudioWaveformView.MODE_IDLE
+        );
+
+        realtimeVoiceClient =
+                new RealtimeVoiceClient(
+                        this,
+                        new RealtimeVoiceClient.Listener() {
+                            @Override
+                            public void onConnected() {
+                                runOnUiThread(() -> {
+                                    realtimeConnected = true;
+                                    stateText.setText(
+                                            "LISTENING • REALTIME"
+                                    );
+                                    waveformView.setMode(
+                                            AudioWaveformView.MODE_USER
+                                    );
+                                });
+                            }
+
+                            @Override
+                            public void onDisconnected() {
+                                runOnUiThread(() -> {
+                                    realtimeConnected = false;
+                                    realtimeAssistantSpeaking = false;
+                                    stateText.setText(
+                                            "REALTIME • DISCONNECTED"
+                                    );
+                                    micButton.setText("🎙");
+                                    waveformView.setMode(
+                                            AudioWaveformView.MODE_IDLE
+                                    );
+                                });
+                            }
+
+                            @Override
+                            public void onError(
+                                    String message
+                            ) {
+                                runOnUiThread(() -> {
+                                    stateText.setText(
+                                            "REALTIME • ERROR"
+                                    );
+                                    Toast.makeText(
+                                            MainActivity.this,
+                                            message == null
+                                                    ? "Onbekende realtime-fout."
+                                                    : message,
+                                            Toast.LENGTH_LONG
+                                    ).show();
+                                });
+                            }
+
+                            @Override
+                            public void onUserSpeechStarted() {
+                                runOnUiThread(() -> {
+                                    stateText.setText(
+                                            "LISTENING • LIVE"
+                                    );
+                                    waveformView.setMode(
+                                            AudioWaveformView.MODE_USER
+                                    );
+                                });
+                            }
+
+                            @Override
+                            public void onUserSpeechStopped() {
+                                runOnUiThread(() -> {
+                                    stateText.setText(
+                                            "RESPONDING • LIVE"
+                                    );
+                                    waveformView.setMode(
+                                            AudioWaveformView.MODE_IDLE
+                                    );
+                                });
+                            }
+
+                            @Override
+                            public void onUserTranscript(
+                                    String text,
+                                    boolean complete
+                            ) {
+                                if (complete
+                                        && text != null
+                                        && !text.trim().isEmpty()) {
+                                    runOnUiThread(() ->
+                                            append(
+                                                    "\n\nJIJ\n"
+                                                            + text.trim()
+                                            )
+                                    );
+                                }
+                            }
+
+                            @Override
+                            public void onAssistantTranscript(
+                                    String text,
+                                    boolean complete
+                            ) {
+                                if (complete
+                                        && text != null
+                                        && !text.trim().isEmpty()) {
+                                    runOnUiThread(() -> {
+                                        String clean =
+                                                text.trim();
+                                        setLastAssistantReply(
+                                                clean
+                                        );
+                                        append(
+                                                "\n\nMAATJE\n"
+                                                        + clean
+                                        );
+                                    });
+                                }
+                            }
+
+                            @Override
+                            public void onAssistantSpeaking(
+                                    boolean speaking
+                            ) {
+                                runOnUiThread(() -> {
+                                    realtimeAssistantSpeaking =
+                                            speaking;
+
+                                    if (speaking) {
+                                        stateText.setText(
+                                                "SPEAKING • REALTIME"
+                                        );
+                                        waveformView.setMode(
+                                                AudioWaveformView
+                                                        .MODE_ASSISTANT
+                                        );
+                                    } else if (realtimeConnected) {
+                                        stateText.setText(
+                                                "LISTENING • REALTIME"
+                                        );
+                                        waveformView.setMode(
+                                                AudioWaveformView
+                                                        .MODE_USER
+                                        );
+                                    }
+                                });
+                            }
+
+                            @Override
+                            public void onMicPcm(
+                                    short[] samples,
+                                    int length
+                            ) {
+                                if (!realtimeAssistantSpeaking
+                                        && waveformView != null) {
+                                    waveformView.pushPcm16(
+                                            samples,
+                                            length
+                                    );
+                                }
+                            }
+
+                            @Override
+                            public void onAssistantPcm(
+                                    byte[] pcm
+                            ) {
+                                if (waveformView != null) {
+                                    waveformView.pushPcm16(pcm);
+                                }
+                            }
+                        }
+                );
+
+        realtimeVoiceClient.start(
+                apiKey,
+                buildRealtimeInstructions(),
+                VoiceSettings.voice(this)
+        );
+    }
+
+    private void stopRealtimeVoice() {
+        RealtimeVoiceClient client =
+                realtimeVoiceClient;
+
+        realtimeVoiceClient = null;
+        realtimeConnected = false;
+        realtimeAssistantSpeaking = false;
+
+        if (client != null) {
+            client.shutdown();
+        }
+
+        if (waveformView != null) {
+            waveformView.setMode(
+                    AudioWaveformView.MODE_IDLE
+            );
+        }
+
+        if (micButton != null) {
+            micButton.setText("🎙");
+        }
+    }
+
+    private String buildRealtimeInstructions() {
+        StringBuilder prompt =
+                new StringBuilder(
+                        "Je bent MAATJE, de persoonlijke realtime "
+                                + "spraakassistent van Thommie. Praat "
+                                + "standaard Nederlands. Reageer snel, "
+                                + "natuurlijk, direct en menselijk. "
+                                + "Gewone antwoorden zijn meestal 1 tot "
+                                + "3 korte zinnen. Gebruik een kalme, "
+                                + "zelfverzekerde vrouwelijke "
+                                + "assistentstijl. Wacht tot je hele "
+                                + "antwoord is uitgesproken voordat je "
+                                + "weer luistert."
+                );
+
+        String voiceStyle =
+                VoiceSettings.style(this);
+
+        if (voiceStyle != null
+                && !voiceStyle.trim().isEmpty()) {
+            prompt.append("\n\nStemstijl:\n")
+                    .append(voiceStyle.trim());
+        }
+
+        String personality =
+                PersonalitySettings.prompt(this);
+
+        if (personality != null
+                && !personality.trim().isEmpty()) {
+            prompt.append("\n\nPersoonlijkheid:\n")
+                    .append(personality.trim());
+        }
+
+        String profile =
+                MemoryStore.getProfile(this);
+
+        if (profile != null
+                && !profile.trim().isEmpty()) {
+            prompt.append("\n\nGebruikersprofiel:\n")
+                    .append(profile.trim());
+        }
+
+        return prompt.toString();
+    }
+
     private void startListening() {
         if (checkSelfPermission(
                 Manifest.permission.RECORD_AUDIO
@@ -1382,7 +1695,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v1.1.1 – Instellingen"
+                        "MAATJE v1.1.2 – Instellingen"
                 )
                 .setItems(
                         options,
@@ -1507,7 +1820,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.1.1 – Geheugen"
+                                "MAATJE v1.1.2 – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -1597,7 +1910,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.1.1 – API"
+                                "MAATJE v1.1.2 – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -2587,7 +2900,7 @@ public class MainActivity extends Activity {
             );
 
             mainHandler.postDelayed(
-                    this::startListening,
+                    this::startRealtimeVoice,
                     350L
             );
         } else {
@@ -2598,6 +2911,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         appVisible = false;
+        stopRealtimeVoice();
         endConversationSession();
         stopRecognitionSession();
 

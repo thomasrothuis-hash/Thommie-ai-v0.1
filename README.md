@@ -1,6 +1,13 @@
-# MAATJE v1.3.2 OnePlus Edition + MAATJE Kiosk v1.0.4
+# MAATJE v1.3.2 OnePlus Edition + MAATJE Kiosk v1.0.5
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## MAATJE Kiosk v1.0.5 verifier-safe LineageOS update flow
+
+- Removes the 2.5 second automatic relock from InstallerBridgeActivity.
+- Keeps kiosk maintenance mode active until PackageInstaller reports a definitive success or failure.
+- Allows LineageOS/Android to show additional verifier or unsafe-app confirmation screens without Kiosk interrupting them.
+- Adds a manual restore button only for the case where the user explicitly cancels installation and Android does not return a final result.
 
 ## MAATJE Kiosk v1.0.4 LineageOS installer bridge
 

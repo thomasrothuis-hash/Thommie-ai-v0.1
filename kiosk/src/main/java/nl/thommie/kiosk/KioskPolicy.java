@@ -49,6 +49,57 @@ final class KioskPolicy {
                 );
     }
 
+    static void restoreLockTaskPackages(
+            Context context
+    ) {
+        DevicePolicyManager dpm =
+                dpm(context);
+
+        if (dpm == null
+                || !isDeviceOwner(context)) {
+            return;
+        }
+
+        try {
+            dpm.setLockTaskPackages(
+                    admin(context),
+                    new String[]{
+                            context.getPackageName(),
+                            MAATJE_PACKAGE
+                    }
+            );
+        } catch (Exception ignored) {}
+    }
+
+    static void allowInstallerTemporarily(
+            Context context,
+            String installerPackage
+    ) {
+        DevicePolicyManager dpm =
+                dpm(context);
+
+        if (dpm == null
+                || !isDeviceOwner(context)) {
+            return;
+        }
+
+        if (installerPackage == null
+                || installerPackage.trim().isEmpty()) {
+            return;
+        }
+
+        try {
+            dpm.setLockTaskPackages(
+                    admin(context),
+                    new String[]{
+                            context.getPackageName(),
+                            MAATJE_PACKAGE,
+                            installerPackage
+                    }
+            );
+        } catch (Exception ignored) {}
+    }
+
     static void apply(
             Activity activity
     ) {
@@ -63,15 +114,9 @@ final class KioskPolicy {
         ComponentName admin =
                 admin(activity);
 
-        try {
-            dpm.setLockTaskPackages(
-                    admin,
-                    new String[]{
-                            activity.getPackageName(),
-                            MAATJE_PACKAGE
-                    }
-            );
-        } catch (Exception ignored) {}
+        restoreLockTaskPackages(
+                activity
+        );
 
         if (Build.VERSION.SDK_INT >= 28) {
             try {

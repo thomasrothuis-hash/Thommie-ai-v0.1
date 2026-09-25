@@ -89,34 +89,7 @@ public class AdminPanelActivity extends Activity {
                     if (status
                             == PackageInstaller
                             .STATUS_PENDING_USER_ACTION) {
-                        Intent confirmation;
-
-                        if (Build.VERSION.SDK_INT >= 33) {
-                            confirmation =
-                                    intent.getParcelableExtra(
-                                            "confirmation_intent",
-                                            Intent.class
-                                    );
-                        } else {
-                            confirmation =
-                                    intent.getParcelableExtra(
-                                            "confirmation_intent"
-                                    );
-                        }
-
-                        if (confirmation == null) {
-                            installFlowActive = false;
-                            updateStatus.setText(
-                                    "Android vroeg om bevestiging, maar leverde geen installatiescherm."
-                            );
-                            KioskPolicy.leaveMaintenance(
-                                    AdminPanelActivity.this
-                            );
-                            return;
-                        }
-
                         installFlowActive = true;
-                        maintenanceReturnPending = true;
                         stopUpdateServer();
 
                         if (qrView != null) {
@@ -127,34 +100,6 @@ public class AdminPanelActivity extends Activity {
 
                         if (updateAddress != null) {
                             updateAddress.setText("");
-                        }
-
-                        updateStatus.setText(
-                                "APK gecontroleerd. Bevestig nu de installatie op deze OnePlus."
-                        );
-
-                        KioskPolicy.enterMaintenance(
-                                AdminPanelActivity.this
-                        );
-
-                        confirmation.addFlags(
-                                Intent.FLAG_ACTIVITY_NEW_TASK
-                        );
-
-                        try {
-                            startActivity(
-                                    confirmation
-                            );
-                        } catch (Exception e) {
-                            installFlowActive = false;
-                            maintenanceReturnPending = false;
-                            updateStatus.setText(
-                                    "Android installatiescherm kon niet openen: "
-                                            + e.getMessage()
-                            );
-                            KioskPolicy.leaveMaintenance(
-                                    AdminPanelActivity.this
-                            );
                         }
 
                         return;
@@ -211,10 +156,6 @@ public class AdminPanelActivity extends Activity {
                 && !installFlowActive) {
             maintenanceReturnPending =
                     false;
-            KioskPolicy.leaveMaintenance(
-                    this
-            );
-        } else if (installFlowActive) {
             KioskPolicy.leaveMaintenance(
                     this
             );

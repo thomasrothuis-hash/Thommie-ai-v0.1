@@ -1,6 +1,13 @@
-# MAATJE v1.3.1 OnePlus Edition + MAATJE Kiosk v1.0.2
+# MAATJE v1.3.1 OnePlus Edition + MAATJE Kiosk v1.0.3
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## MAATJE Kiosk v1.0.3 installer hotfix
+
+- Opens Android's PackageInstaller confirmation directly from InstallResultReceiver instead of relaying the intent through AdminPanelActivity.
+- Temporarily adds the resolved OxygenOS/Android installer package to the Device Owner Lock Task allowlist.
+- Keeps that temporary allowlist active until Android reports installation success or failure.
+- Restores the normal Kiosk + MAATJE allowlist automatically afterwards.
 
 ## v1.3.1 OnePlus Edition updater + UI fix
 

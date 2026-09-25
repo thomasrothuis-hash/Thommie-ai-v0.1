@@ -10,6 +10,10 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
+    <queries>
+        <package android:name="nl.thommie.ai" />
+    </queries>
+
     <permission
         android:name="nl.thommie.kiosk.permission.CONTROL"
         android:protectionLevel="signature" />

@@ -183,23 +183,35 @@ final class KioskPolicy {
     static boolean launchMaatje(
             Context context
     ) {
-        Intent launch =
-                context.getPackageManager()
-                        .getLaunchIntentForPackage(
-                                MAATJE_PACKAGE
-                        );
+        try {
+            context.getPackageManager()
+                    .getPackageInfo(
+                            MAATJE_PACKAGE,
+                            0
+                    );
 
-        if (launch == null) {
+            Intent launch =
+                    new Intent();
+
+            launch.setComponent(
+                    new ComponentName(
+                            MAATJE_PACKAGE,
+                            "nl.thommie.ai.MainActivity"
+                    )
+            );
+
+            launch.addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK
+                            | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                            | Intent.FLAG_ACTIVITY_CLEAR_TOP
+            );
+
+            context.startActivity(launch);
+            return true;
+
+        } catch (Exception ignored) {
             return false;
         }
-
-        launch.addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK
-                        | Intent.FLAG_ACTIVITY_SINGLE_TOP
-        );
-
-        context.startActivity(launch);
-        return true;
     }
 
     private static void setPersistentHome(

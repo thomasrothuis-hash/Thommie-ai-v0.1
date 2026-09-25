@@ -65,7 +65,7 @@ final class InternetSettings {
 
         new AlertDialog.Builder(activity)
                 .setTitle(
-                        "MAATJE v1.1.2 – Internet"
+                        "MAATJE v1.1.3 – Internet"
                 )
                 .setSingleChoiceItems(
                         options,
@@ -92,6 +92,40 @@ final class InternetSettings {
                         null
                 )
                 .show();
+    }
+
+    static boolean shouldForceWeb(
+            String raw
+    ) {
+        if (raw == null) {
+            return false;
+        }
+
+        String q = raw.toLowerCase(
+                java.util.Locale.ROOT
+        );
+
+        return q.contains("weer")
+                || q.contains("weather")
+                || q.contains("nieuws")
+                || q.contains("news")
+                || q.contains("actueel")
+                || q.contains("huidige")
+                || q.contains("vandaag")
+                || q.contains("vannacht")
+                || q.contains("morgen")
+                || q.contains("nu ")
+                || q.startsWith("nu ")
+                || q.contains("live")
+                || q.contains("prijs")
+                || q.contains("koers")
+                || q.contains("openingstijd")
+                || q.contains("verkeer")
+                || q.contains("file")
+                || q.contains("zoek op internet")
+                || q.contains("zoek online")
+                || q.contains("google")
+                || q.contains("internet opzoeken");
     }
 
     static CommandResult handleCommand(

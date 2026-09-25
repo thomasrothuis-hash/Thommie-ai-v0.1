@@ -1,6 +1,17 @@
-# MAATJE v1.1.2
+# MAATJE v1.1.3
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## v1.1.3 internet restore
+
+- Adds a session-level search_internet function tool to gpt-realtime-2.1.
+- Realtime Voice now calls the app when it needs current weather, news, prices, rates, traffic, opening hours, sports results or an explicit internet lookup.
+- The app performs the live lookup through the Responses API web_search tool and returns the result as function_call_output to the same realtime conversation.
+- The realtime model then continues with a spoken answer instead of claiming it has no internet access.
+- Keeps the Internet setting: when internet is disabled locally, the realtime search tool is not exposed.
+- Forces web search for clearly time-sensitive typed questions such as weather, news, today/current/live information and explicit online searches.
+- Enables external live web access explicitly and requests source metadata from web_search.
+- Keeps the v1.1.2 realtime audio/equalizer and hard echo lock behavior unchanged.
 
 ## v1.1.2 realtime main-screen and hard echo lock
 
@@ -186,4 +197,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v1.1.2.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v1.1.3.apk` as a workflow artifact.

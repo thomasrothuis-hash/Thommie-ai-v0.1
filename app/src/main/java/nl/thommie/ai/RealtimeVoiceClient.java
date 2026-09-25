@@ -64,6 +64,8 @@ final class RealtimeVoiceClient {
             Executors.newSingleThreadExecutor();
     private final ExecutorService playbackExecutor =
             Executors.newSingleThreadExecutor();
+    private final ExecutorService toolExecutor =
+            Executors.newSingleThreadExecutor();
 
     private OkHttpClient httpClient;
     private WebSocket webSocket;
@@ -82,6 +84,7 @@ final class RealtimeVoiceClient {
     private final ArrayDeque<byte[]> bargeInBuffer =
             new ArrayDeque<>();
 
+    private String apiKey;
     private String instructions;
     private String voice;
 
@@ -108,6 +111,10 @@ final class RealtimeVoiceClient {
             return;
         }
 
+        this.apiKey =
+                apiKey == null
+                        ? ""
+                        : apiKey;
         this.instructions =
                 instructions == null
                         ? ""
@@ -261,6 +268,7 @@ final class RealtimeVoiceClient {
         stop();
         microphoneExecutor.shutdownNow();
         playbackExecutor.shutdownNow();
+        toolExecutor.shutdownNow();
     }
 
     boolean isRunning() {
@@ -459,6 +467,26 @@ final class RealtimeVoiceClient {
                             .put("input", input)
                             .put("output", output);
 
+            boolean internetEnabled =
+                    InternetSettings.enabled(context);
+
+            String sessionInstructions =
+                    instructions;
+
+            if (internetEnabled) {
+                sessionInstructions +=
+                        "\n\nJe hebt een tool search_internet. "
+                                + "Gebruik die ALTIJD voor actuele of veranderlijke informatie, "
+                                + "zoals weer, nieuws, prijzen, koersen, verkeer, openingstijden, "
+                                + "sportuitslagen en wanneer de gebruiker expliciet vraagt iets online op te zoeken. "
+                                + "Zeg nooit dat je geen internettoegang hebt zolang deze tool beschikbaar is. "
+                                + "Wacht op het toolresultaat en geef daarna pas het inhoudelijke antwoord.";
+            } else {
+                sessionInstructions +=
+                        "\n\nInternet zoeken staat lokaal uit. "
+                                + "Gebruik geen live internetinformatie en zeg dat internet zoeken uit staat als actuele data nodig is.";
+            }
+
             JSONObject session =
                     new JSONObject()
                             .put(
@@ -488,8 +516,65 @@ final class RealtimeVoiceClient {
                             )
                             .put(
                                     "instructions",
-                                    instructions
+                                    sessionInstructions
                             );
+
+            if (internetEnabled) {
+                JSONObject queryProperty =
+                        new JSONObject()
+                                .put("type", "string")
+                                .put(
+                                        "description",
+                                        "De concrete internetzoekopdracht, inclusief relevante plaats, onderwerp en tijdsperiode."
+                                );
+
+                JSONObject parameters =
+                        new JSONObject()
+                                .put("type", "object")
+                                .put(
+                                        "properties",
+                                        new JSONObject()
+                                                .put(
+                                                        "query",
+                                                        queryProperty
+                                                )
+                                )
+                                .put(
+                                        "required",
+                                        new JSONArray()
+                                                .put("query")
+                                )
+                                .put(
+                                        "additionalProperties",
+                                        false
+                                );
+
+                JSONObject internetTool =
+                        new JSONObject()
+                                .put("type", "function")
+                                .put(
+                                        "name",
+                                        "search_internet"
+                                )
+                                .put(
+                                        "description",
+                                        "Zoek live op internet naar actuele of externe informatie. Gebruik dit voor weer, nieuws, prijzen, koersen, verkeer, openingstijden, sportuitslagen en expliciete online zoekvragen."
+                                )
+                                .put(
+                                        "parameters",
+                                        parameters
+                                );
+
+                session.put(
+                        "tools",
+                        new JSONArray()
+                                .put(internetTool)
+                );
+                session.put(
+                        "tool_choice",
+                        "auto"
+                );
+            }
 
             send(
                     new JSONObject()
@@ -935,6 +1020,164 @@ final class RealtimeVoiceClient {
         } catch (Exception ignored) {}
     }
 
+    private boolean handleFunctionCalls(
+            JSONObject response
+    ) {
+        if (response == null) {
+            return false;
+        }
+
+        JSONArray output =
+                response.optJSONArray("output");
+
+        if (output == null) {
+            return false;
+        }
+
+        for (int i = 0; i < output.length(); i++) {
+            JSONObject item =
+                    output.optJSONObject(i);
+
+            if (item == null
+                    || !"function_call".equals(
+                            item.optString("type")
+                    )) {
+                continue;
+            }
+
+            String name =
+                    item.optString("name", "");
+            String callId =
+                    item.optString("call_id", "");
+
+            if (!"search_internet".equals(name)
+                    || callId.isEmpty()) {
+                continue;
+            }
+
+            String arguments =
+                    item.optString(
+                            "arguments",
+                            "{}"
+                    );
+
+            toolExecutor.submit(() ->
+                    executeInternetTool(
+                            callId,
+                            arguments
+                    )
+            );
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private void executeInternetTool(
+            String callId,
+            String arguments
+    ) {
+        String output;
+
+        try {
+            if (!InternetSettings.enabled(context)) {
+                output =
+                        "Internet zoeken staat lokaal uit.";
+            } else {
+                JSONObject args =
+                        new JSONObject(
+                                arguments == null
+                                        ? "{}"
+                                        : arguments
+                        );
+
+                String query =
+                        args.optString(
+                                "query",
+                                ""
+                        ).trim();
+
+                if (query.isEmpty()) {
+                    throw new Exception(
+                            "De realtime-tool gaf geen zoekopdracht door."
+                    );
+                }
+
+                output =
+                        OpenAiClient.searchInternet(
+                                apiKey,
+                                query
+                        );
+            }
+
+        } catch (Exception e) {
+            output =
+                    "Internetzoekactie mislukt: "
+                            + safeMessage(e);
+        }
+
+        if (!running.get()
+                || !socketReady.get()) {
+            return;
+        }
+
+        try {
+            JSONObject item =
+                    new JSONObject()
+                            .put(
+                                    "type",
+                                    "function_call_output"
+                            )
+                            .put(
+                                    "call_id",
+                                    callId
+                            )
+                            .put(
+                                    "output",
+                                    output
+                            );
+
+            send(
+                    new JSONObject()
+                            .put(
+                                    "type",
+                                    "conversation.item.create"
+                            )
+                            .put(
+                                    "item",
+                                    item
+                            )
+            );
+
+            send(
+                    new JSONObject()
+                            .put(
+                                    "type",
+                                    "response.create"
+                            )
+                            .put(
+                                    "response",
+                                    new JSONObject()
+                                            .put(
+                                                    "output_modalities",
+                                                    new JSONArray()
+                                                            .put("audio")
+                                            )
+                                            .put(
+                                                    "tool_choice",
+                                                    "none"
+                                            )
+                            )
+            );
+
+        } catch (Exception e) {
+            listener.onError(
+                    safeMessage(e)
+            );
+        }
+    }
+
     private void handleServerEvent(
             String raw
     ) {
@@ -1058,6 +1301,16 @@ final class RealtimeVoiceClient {
                 }
 
                 case "response.done": {
+                    JSONObject response =
+                            event.optJSONObject(
+                                    "response"
+                            );
+
+                    boolean toolCall =
+                            handleFunctionCalls(
+                                    response
+                            );
+
                     int generation =
                             playbackGeneration.get();
 
@@ -1074,6 +1327,11 @@ final class RealtimeVoiceClient {
                                 SystemClock.elapsedRealtime();
                         listener.onAssistantSpeaking(false);
                     });
+
+                    if (toolCall) {
+                        clearBargeInCandidate();
+                    }
+
                     break;
                 }
 

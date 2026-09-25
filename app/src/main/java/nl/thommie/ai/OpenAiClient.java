@@ -74,7 +74,7 @@ final class OpenAiClient {
         JSONObject body = new JSONObject();
         JSONObject metadata = new JSONObject();
         metadata.put("app", "MAATJE");
-        metadata.put("version", "1.1.2");
+        metadata.put("version", "1.1.3");
         body.put("metadata", metadata);
 
         writeJson(conn, body);
@@ -270,9 +270,22 @@ final class OpenAiClient {
             JSONObject web = new JSONObject();
             web.put("type", "web_search");
             web.put("search_context_size", "low");
+            web.put("external_web_access", true);
             tools.put(web);
             body.put("tools", tools);
-            body.put("tool_choice", "auto");
+            body.put(
+                    "tool_choice",
+                    InternetSettings.shouldForceWeb(input)
+                            ? "required"
+                            : "auto"
+            );
+            body.put(
+                    "include",
+                    new JSONArray()
+                            .put(
+                                    "web_search_call.action.sources"
+                            )
+            );
         }
 
         String instructions =
@@ -588,6 +601,65 @@ final class OpenAiClient {
                 totalTokens,
                 cachedTokens
         );
+    }
+
+    static String searchInternet(
+            String apiKey,
+            String query
+    ) throws Exception {
+        String clean =
+                query == null
+                        ? ""
+                        : query.trim();
+
+        if (clean.isEmpty()) {
+            throw new Exception(
+                    "Geen zoekopdracht ontvangen."
+            );
+        }
+
+        Reply reply = ask(
+                apiKey,
+                "gpt-5.6-luna",
+                "",
+                "Zoek dit live op internet. Gebruik actuele informatie en geef een kort, feitelijk antwoord: "
+                        + clean,
+                "",
+                "",
+                true
+        );
+
+        StringBuilder result =
+                new StringBuilder(
+                        reply.text
+                );
+
+        if (reply.sources != null
+                && !reply.sources.isEmpty()) {
+            result.append("\n\nBronnen:");
+
+            int max = Math.min(
+                    5,
+                    reply.sources.size()
+            );
+
+            for (int i = 0; i < max; i++) {
+                Source source =
+                        reply.sources.get(i);
+
+                result.append("\n- ");
+
+                if (source.title != null
+                        && !source.title.isEmpty()) {
+                    result.append(source.title)
+                            .append(": ");
+                }
+
+                result.append(source.url);
+            }
+        }
+
+        return result.toString().trim();
     }
 
     private static HttpURLConnection open(URL url, String apiKey)

@@ -234,12 +234,15 @@ public class AdminPanelActivity extends Activity {
                 action(
                         "ANDROID-INSTELLINGEN OPENEN",
                         v -> {
-                            maintenanceReturnPending =
-                                    true;
-                            KioskPolicy
-                                    .openAndroidSettings(
-                                            this
+                            Intent intent =
+                                    new Intent(
+                                            this,
+                                            SettingsBridgeActivity.class
                                     );
+
+                            startActivity(
+                                    intent
+                            );
                         }
                 ),
                 buttonParams()

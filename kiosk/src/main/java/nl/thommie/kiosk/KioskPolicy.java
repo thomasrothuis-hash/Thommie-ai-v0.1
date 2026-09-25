@@ -71,9 +71,9 @@ final class KioskPolicy {
         } catch (Exception ignored) {}
     }
 
-    static void allowInstallerTemporarily(
+    static void allowPackageTemporarily(
             Context context,
-            String installerPackage
+            String packageName
     ) {
         DevicePolicyManager dpm =
                 dpm(context);
@@ -83,8 +83,8 @@ final class KioskPolicy {
             return;
         }
 
-        if (installerPackage == null
-                || installerPackage.trim().isEmpty()) {
+        if (packageName == null
+                || packageName.trim().isEmpty()) {
             return;
         }
 
@@ -94,10 +94,20 @@ final class KioskPolicy {
                     new String[]{
                             context.getPackageName(),
                             MAATJE_PACKAGE,
-                            installerPackage
+                            packageName
                     }
             );
         } catch (Exception ignored) {}
+    }
+
+    static void allowInstallerTemporarily(
+            Context context,
+            String installerPackage
+    ) {
+        allowPackageTemporarily(
+                context,
+                installerPackage
+        );
     }
 
     static void apply(

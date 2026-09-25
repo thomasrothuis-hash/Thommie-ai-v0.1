@@ -1,6 +1,15 @@
-# MAATJE v1.3.2 OnePlus Edition + MAATJE Kiosk v1.0.6
+# MAATJE v1.3.2 OnePlus Edition + MAATJE Kiosk v1.0.7
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## MAATJE Kiosk v1.0.7 Android Settings bridge
+
+- Adds a dedicated SettingsBridgeActivity for LineageOS/AOSP.
+- Fully exits Lock Task before opening Android Settings.
+- Resolves and temporarily allowlists the actual Settings package on the ROM.
+- Keeps the device in maintenance mode while Settings is open.
+- Does not auto-relock while the user is changing Android settings.
+- Provides an explicit KIOSK HERSTELLEN -> MAATJE button after returning.
 
 ## MAATJE Kiosk v1.0.6 normal installer route
 

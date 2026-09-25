@@ -17,6 +17,10 @@ import java.util.Set;
 
 final class OpenAiClient {
 
+    interface StreamListener {
+        void onText(String text);
+    }
+
     static final class Source {
         final String title;
         final String url;
@@ -70,7 +74,7 @@ final class OpenAiClient {
         JSONObject body = new JSONObject();
         JSONObject metadata = new JSONObject();
         metadata.put("app", "MAATJE");
-        metadata.put("version", "0.9.5.1");
+        metadata.put("version", "1.0.0");
         body.put("metadata", metadata);
 
         writeJson(conn, body);
@@ -114,9 +118,11 @@ final class OpenAiClient {
                 conversationId,
                 input,
                 null,
+                "high",
                 profileMemory,
                 personalityPrompt,
-                webSearchEnabled
+                webSearchEnabled,
+                null
         );
     }
 
@@ -136,9 +142,61 @@ final class OpenAiClient {
                 conversationId,
                 input,
                 imageDataUrl,
+                "high",
                 profileMemory,
                 personalityPrompt,
-                webSearchEnabled
+                webSearchEnabled,
+                null
+        );
+    }
+
+    static Reply askStreaming(
+            String apiKey,
+            String model,
+            String conversationId,
+            String input,
+            String profileMemory,
+            String personalityPrompt,
+            boolean webSearchEnabled,
+            StreamListener listener
+    ) throws Exception {
+        return askInternal(
+                apiKey,
+                model,
+                conversationId,
+                input,
+                null,
+                "high",
+                profileMemory,
+                personalityPrompt,
+                webSearchEnabled,
+                listener
+        );
+    }
+
+    static Reply askWithImageStreaming(
+            String apiKey,
+            String model,
+            String conversationId,
+            String input,
+            String imageDataUrl,
+            String imageDetail,
+            String profileMemory,
+            String personalityPrompt,
+            boolean webSearchEnabled,
+            StreamListener listener
+    ) throws Exception {
+        return askInternal(
+                apiKey,
+                model,
+                conversationId,
+                input,
+                imageDataUrl,
+                imageDetail,
+                profileMemory,
+                personalityPrompt,
+                webSearchEnabled,
+                listener
         );
     }
 
@@ -148,9 +206,11 @@ final class OpenAiClient {
             String conversationId,
             String input,
             String imageDataUrl,
+            String imageDetail,
             String profileMemory,
             String personalityPrompt,
-            boolean webSearchEnabled
+            boolean webSearchEnabled,
+            StreamListener streamListener
     ) throws Exception {
 
         URL url = new URL("https://api.openai.com/v1/responses");
@@ -158,6 +218,17 @@ final class OpenAiClient {
 
         JSONObject body = new JSONObject();
         body.put("model", model);
+        body.put(
+                "reasoning",
+                new JSONObject().put("effort", "none")
+        );
+        body.put(
+                "text",
+                new JSONObject().put("verbosity", "low")
+        );
+        body.put("max_output_tokens", 700);
+        body.put("prompt_cache_key", "maatje-v1");
+        body.put("prompt_cache_retention", "24h");
 
         if (imageDataUrl == null
                 || imageDataUrl.trim().isEmpty()) {
@@ -177,7 +248,12 @@ final class OpenAiClient {
                     new JSONObject()
                             .put("type", "input_image")
                             .put("image_url", imageDataUrl)
-                            .put("detail", "high")
+                            .put(
+                                    "detail",
+                                    imageDetail == null
+                                            ? "low"
+                                            : imageDetail
+                            )
             );
 
             message.put("content", content);
@@ -193,7 +269,7 @@ final class OpenAiClient {
             JSONArray tools = new JSONArray();
             JSONObject web = new JSONObject();
             web.put("type", "web_search");
-            web.put("search_context_size", "medium");
+            web.put("search_context_size", "low");
             tools.put(web);
             body.put("tools", tools);
             body.put("tool_choice", "auto");
@@ -203,6 +279,8 @@ final class OpenAiClient {
                 "Je bent MAATJE, een persoonlijke assistent op een dedicated Android-toestel. "
                 + "Antwoord standaard in het Nederlands. "
                 + "Wees slim, relaxed, direct, technisch competent en menselijk. "
+                + "Reageer als een snelle spraakassistent: geef bij gewone vragen standaard een kort antwoord van ongeveer 1 tot 3 zinnen. "
+                + "Ga alleen uitgebreid in detail wanneer de gebruiker daarom vraagt of wanneer extra uitleg echt nodig is. "
                 + "Geen overdreven klantenservice-toon, geen onnodige emoji's en geen lange beleefdheidsintroducties. "
                 + "Gebruik korte natuurlijke bevestigingen waar passend. "
                 + "Als de gebruiker technisch doorvraagt, mag je diep gaan. "
@@ -251,19 +329,39 @@ final class OpenAiClient {
 
         body.put("instructions", instructions);
 
+        if (streamListener != null) {
+            body.put("stream", true);
+            conn.setRequestProperty(
+                    "Accept",
+                    "text/event-stream"
+            );
+        }
+
         writeJson(conn, body);
 
         int status = conn.getResponseCode();
-        String raw = readAll(
-                status >= 200 && status < 300
-                        ? conn.getInputStream()
-                        : conn.getErrorStream()
-        );
-        conn.disconnect();
 
         if (status < 200 || status >= 300) {
-            throw new Exception(extractError(raw, status));
+            String raw = readAll(
+                    conn.getErrorStream()
+            );
+            conn.disconnect();
+            throw new Exception(
+                    extractError(raw, status)
+            );
         }
+
+        if (streamListener != null) {
+            return readStreamingReply(
+                    conn,
+                    streamListener
+            );
+        }
+
+        String raw = readAll(
+                conn.getInputStream()
+        );
+        conn.disconnect();
 
         JSONObject root = new JSONObject(raw);
         String id = root.optString("id", "");
@@ -292,6 +390,188 @@ final class OpenAiClient {
 
         if (!sources.isEmpty()) {
             webUsed = true;
+        }
+
+        if (text.isEmpty()) {
+            text = "Ik kreeg een leeg antwoord terug van de API.";
+        }
+
+        return new Reply(
+                id,
+                text,
+                webUsed,
+                sources,
+                inputTokens,
+                outputTokens,
+                totalTokens,
+                cachedTokens
+        );
+    }
+
+    private static Reply readStreamingReply(
+            HttpURLConnection conn,
+            StreamListener listener
+    ) throws Exception {
+        JSONObject completedResponse = null;
+        StringBuilder generated =
+                new StringBuilder();
+
+        try (BufferedReader reader =
+                     new BufferedReader(
+                             new InputStreamReader(
+                                     conn.getInputStream(),
+                                     StandardCharsets.UTF_8
+                             )
+                     )) {
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                if (!line.startsWith("data:")) {
+                    continue;
+                }
+
+                String payload =
+                        line.substring(5).trim();
+
+                if (payload.isEmpty()) {
+                    continue;
+                }
+
+                if ("[DONE]".equals(payload)) {
+                    break;
+                }
+
+                JSONObject event =
+                        new JSONObject(payload);
+
+                String type =
+                        event.optString("type", "");
+
+                if ("response.output_text.delta"
+                        .equals(type)) {
+                    String delta =
+                            event.optString(
+                                    "delta",
+                                    ""
+                            );
+
+                    if (!delta.isEmpty()) {
+                        generated.append(delta);
+                        listener.onText(
+                                generated.toString()
+                        );
+                    }
+                } else if ("response.completed"
+                        .equals(type)) {
+                    completedResponse =
+                            event.optJSONObject(
+                                    "response"
+                            );
+                } else if ("response.failed"
+                        .equals(type)
+                        || "error".equals(type)) {
+                    JSONObject error =
+                            event.optJSONObject(
+                                    "error"
+                            );
+
+                    throw new Exception(
+                            error == null
+                                    ? "Streaming response mislukt."
+                                    : error.optString(
+                                            "message",
+                                            "Streaming response mislukt."
+                                    )
+                    );
+                }
+            }
+        } finally {
+            conn.disconnect();
+        }
+
+        if (completedResponse == null) {
+            String text =
+                    generated.toString().trim();
+
+            if (text.isEmpty()) {
+                text = "Ik kreeg een leeg antwoord terug van de API.";
+            }
+
+            return new Reply(
+                    "",
+                    text,
+                    false,
+                    new ArrayList<>(),
+                    0L,
+                    0L,
+                    0L,
+                    0L
+            );
+        }
+
+        String id =
+                completedResponse.optString(
+                        "id",
+                        ""
+                );
+        String text =
+                extractOutputText(
+                        completedResponse
+                );
+        boolean webUsed =
+                containsWebSearchCall(
+                        completedResponse
+                );
+        List<Source> sources =
+                extractWebSources(
+                        completedResponse
+                );
+
+        JSONObject usage =
+                completedResponse
+                        .optJSONObject("usage");
+
+        long inputTokens = usage == null
+                ? 0L
+                : usage.optLong(
+                        "input_tokens",
+                        0L
+                );
+        long outputTokens = usage == null
+                ? 0L
+                : usage.optLong(
+                        "output_tokens",
+                        0L
+                );
+        long totalTokens = usage == null
+                ? inputTokens + outputTokens
+                : usage.optLong(
+                        "total_tokens",
+                        inputTokens + outputTokens
+                );
+
+        long cachedTokens = 0L;
+        if (usage != null) {
+            JSONObject details =
+                    usage.optJSONObject(
+                            "input_tokens_details"
+                    );
+
+            if (details != null) {
+                cachedTokens =
+                        details.optLong(
+                                "cached_tokens",
+                                0L
+                        );
+            }
+        }
+
+        if (!sources.isEmpty()) {
+            webUsed = true;
+        }
+
+        if (text.isEmpty()) {
+            text = generated.toString().trim();
         }
 
         if (text.isEmpty()) {

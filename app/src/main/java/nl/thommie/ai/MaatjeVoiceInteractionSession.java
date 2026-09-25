@@ -510,7 +510,7 @@ final class MaatjeVoiceInteractionSession
 
         mainHandler.postDelayed(
                 this::startListening,
-                380L
+                300L
         );
     }
 
@@ -1031,7 +1031,7 @@ final class MaatjeVoiceInteractionSession
         intent.putExtra(
                 RecognizerIntent
                         .EXTRA_MAX_RESULTS,
-                5
+                1
         );
 
         if (android.os.Build.VERSION.SDK_INT
@@ -1040,7 +1040,7 @@ final class MaatjeVoiceInteractionSession
                     RecognizerIntent
                             .EXTRA_ENABLE_FORMATTING,
                     RecognizerIntent
-                            .FORMATTING_OPTIMIZE_QUALITY
+                            .FORMATTING_OPTIMIZE_LATENCY
             );
         }
 
@@ -1218,6 +1218,12 @@ final class MaatjeVoiceInteractionSession
             return;
         }
 
+        final boolean highVisionDetail =
+                screenVisionQuery
+                        && requiresHighVisionDetail(
+                                normalized
+                        );
+
         final Bitmap screenshotForRequest =
                 screenVisionQuery
                         ? copyLatestScreenshot()
@@ -1278,36 +1284,70 @@ final class MaatjeVoiceInteractionSession
                 String screenshotDataUrl =
                         screenVisionQuery
                                 ? encodeScreenshot(
-                                        screenshotForRequest
+                                        screenshotForRequest,
+                                        highVisionDetail
                                 )
                                 : null;
+
+                OpenAiClient.StreamListener
+                        streamListener =
+                        streamedText ->
+                                mainHandler.post(() -> {
+                                    if (!sessionVisible
+                                            || !thinking) {
+                                        return;
+                                    }
+
+                                    String partial =
+                                            cleanAssistantText(
+                                                    streamedText
+                                            );
+
+                                    if (!partial.isEmpty()
+                                            && answerText != null) {
+                                        answerText.setText(
+                                                partial
+                                        );
+                                    }
+
+                                    setStatus(
+                                            screenVisionQuery
+                                                    ? "SEEING • RESPONDING"
+                                                    : "RESPONDING"
+                                    );
+                                });
 
                 OpenAiClient.Reply reply;
 
                 if (screenVisionQuery) {
                     reply =
-                            OpenAiClient.askWithImage(
-                                    key,
-                                    "gpt-5.6-luna",
-                                    conversationId,
-                                    query,
-                                    screenshotDataUrl,
-                                    MemoryStore
-                                            .getProfile(
-                                                    context
-                                            ),
-                                    PersonalitySettings
-                                            .prompt(
-                                                    context
-                                            ),
-                                    InternetSettings
-                                            .enabled(
-                                                    context
-                                            )
-                            );
+                            OpenAiClient
+                                    .askWithImageStreaming(
+                                            key,
+                                            "gpt-5.6-luna",
+                                            conversationId,
+                                            query,
+                                            screenshotDataUrl,
+                                            highVisionDetail
+                                                    ? "high"
+                                                    : "low",
+                                            MemoryStore
+                                                    .getProfile(
+                                                            context
+                                                    ),
+                                            PersonalitySettings
+                                                    .prompt(
+                                                            context
+                                                    ),
+                                            InternetSettings
+                                                    .enabled(
+                                                            context
+                                                    ),
+                                            streamListener
+                                    );
                 } else {
                     reply =
-                            OpenAiClient.ask(
+                            OpenAiClient.askStreaming(
                                     key,
                                     "gpt-5.6-luna",
                                     conversationId,
@@ -1323,7 +1363,8 @@ final class MaatjeVoiceInteractionSession
                                     InternetSettings
                                             .enabled(
                                                     context
-                                            )
+                                            ),
+                                    streamListener
                             );
                 }
 
@@ -1433,6 +1474,22 @@ final class MaatjeVoiceInteractionSession
                 || value.contains("wat is dit");
     }
 
+    private boolean requiresHighVisionDetail(
+            String normalized
+    ) {
+        if (normalized == null) {
+            return false;
+        }
+
+        return normalized.contains("lees")
+                || normalized.contains("tekst")
+                || normalized.contains("wat staat")
+                || normalized.contains("nummer")
+                || normalized.contains("code")
+                || normalized.contains("kleine letters")
+                || normalized.contains("details");
+    }
+
     private Bitmap copyLatestScreenshot() {
         Bitmap screenshot = latestScreenshot;
 
@@ -1460,7 +1517,8 @@ final class MaatjeVoiceInteractionSession
     }
 
     private String encodeScreenshot(
-            Bitmap screenshot
+            Bitmap screenshot,
+            boolean highDetail
     ) throws Exception {
         if (screenshot == null
                 || screenshot.isRecycled()) {
@@ -1473,9 +1531,12 @@ final class MaatjeVoiceInteractionSession
         int width = screenshot.getWidth();
         int height = screenshot.getHeight();
         int maxEdge = Math.max(width, height);
+        int targetMaxEdge =
+                highDetail ? 2400 : 1600;
 
-        if (maxEdge > 2400) {
-            float scale = 2400f / maxEdge;
+        if (maxEdge > targetMaxEdge) {
+            float scale =
+                    targetMaxEdge / (float) maxEdge;
             working = Bitmap.createScaledBitmap(
                     screenshot,
                     Math.max(1, Math.round(width * scale)),
@@ -1488,7 +1549,7 @@ final class MaatjeVoiceInteractionSession
                      new ByteArrayOutputStream()) {
             if (!working.compress(
                     Bitmap.CompressFormat.JPEG,
-                    82,
+                    highDetail ? 82 : 72,
                     output
             )) {
                 throw new Exception(

@@ -1,6 +1,17 @@
-# MAATJE v0.9.5.1
+# MAATJE v1.0.0
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
+
+## v1.0.0 speed update
+
+- Streams Responses API text into the assistant overlay while the model is still generating.
+- Uses GPT-5.6 Luna with reasoning effort set to none and low output verbosity for faster everyday replies.
+- Caps normal assistant replies and prompts MAATJE to answer ordinary questions in roughly 1–3 sentences unless more detail is needed.
+- Uses a stable prompt-cache key with 24-hour cache retention to improve reuse of repeated conversation prefixes.
+- Lowers web-search context size for faster tool-enabled answers.
+- Uses low-detail vision and smaller JPEG uploads for ordinary screen descriptions, while keeping high detail for OCR-like requests such as reading text, numbers or codes.
+- Changes Android speech formatting from quality-optimized to latency-optimized and requests only the single best recognition result.
+- Starts overlay speech recognition slightly sooner after microphone handoff.
 
 ## v0.9.5.1 fixes
 
@@ -142,4 +153,4 @@ Expected output:
 
 
 ## GitHub Actions
-`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v0.9.5.1.apk` as a workflow artifact.
+`.github/workflows/build-apk.yml` builds with Java 17, Android SDK 35 and Gradle 8.9, then uploads `MAATJE_v1.0.0.apk` as a workflow artifact.

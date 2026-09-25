@@ -104,13 +104,6 @@ final class KioskPolicy {
             );
         } catch (Exception ignored) {}
 
-        try {
-            dpm.addUserRestriction(
-                    admin,
-                    UserManager.DISALLOW_GUEST
-            );
-        } catch (Exception ignored) {}
-
         setPersistentHome(
                 activity,
                 dpm,

@@ -1,18 +1,13 @@
 package nl.thommie.kiosk;
 
-import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentSender;
 import android.content.pm.PackageInfo;
-import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
 import android.os.Build;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.OutputStream;
 import java.security.MessageDigest;
 import java.util.Arrays;
 
@@ -21,9 +16,25 @@ final class ApkInstaller {
     static final String ACTION_INSTALL_STATUS =
             "nl.thommie.kiosk.INSTALL_STATUS";
 
+    static final class ValidatedApk {
+        final String packageName;
+        final String versionName;
+        final String displayName;
+
+        ValidatedApk(
+                String packageName,
+                String versionName,
+                String displayName
+        ) {
+            this.packageName = packageName;
+            this.versionName = versionName;
+            this.displayName = displayName;
+        }
+    }
+
     private ApkInstaller() {}
 
-    static String validateMaatjeApk(
+    static ValidatedApk validateUpdateApk(
             Context context,
             File apk
     ) throws Exception {
@@ -46,10 +57,27 @@ final class ApkInstaller {
                 );
 
         if (archive == null
-                || !KioskPolicy.MAATJE_PACKAGE
-                .equals(archive.packageName)) {
+                || archive.packageName == null) {
             throw new Exception(
-                    "Dit is geen MAATJE APK."
+                    "APK kon niet worden gelezen."
+            );
+        }
+
+        String packageName =
+                archive.packageName;
+
+        boolean isMaatje =
+                KioskPolicy.MAATJE_PACKAGE
+                        .equals(packageName);
+
+        boolean isKiosk =
+                context.getPackageName()
+                        .equals(packageName);
+
+        if (!isMaatje
+                && !isKiosk) {
+            throw new Exception(
+                    "Alleen MAATJE of MAATJE Kiosk kan via deze updater worden geïnstalleerd."
             );
         }
 
@@ -65,8 +93,9 @@ final class ApkInstaller {
         }
 
         byte[] trustedCert =
-                trustedSignerDigest(
-                        context
+                installedSignerDigest(
+                        context,
+                        packageName
                 );
 
         if (trustedCert == null
@@ -75,174 +104,87 @@ final class ApkInstaller {
                         trustedCert
                 )) {
             throw new Exception(
-                    "APK-handtekening komt niet overeen met MAATJE/Kiosk."
+                    "APK-handtekening komt niet overeen met de geïnstalleerde "
+                            + (isKiosk
+                            ? "MAATJE Kiosk."
+                            : "MAATJE.")
             );
         }
 
-        return archive.versionName == null
-                ? "onbekende versie"
-                : archive.versionName;
+        String version =
+                archive.versionName == null
+                        ? "onbekende versie"
+                        : archive.versionName;
+
+        return new ValidatedApk(
+                packageName,
+                version,
+                isKiosk
+                        ? "MAATJE Kiosk"
+                        : "MAATJE"
+        );
     }
 
-    static void launchManualMaatjeInstall(
+    static void launchManualInstall(
             Context context,
             File apk,
-            String expectedVersion
+            ValidatedApk info
     ) throws Exception {
-        validateMaatjeApk(
-                context,
-                apk
-        );
+        ValidatedApk checked =
+                validateUpdateApk(
+                        context,
+                        apk
+                );
+
+        if (!checked.packageName.equals(
+                info.packageName
+        )) {
+            throw new Exception(
+                    "APK-doelpakket veranderde tijdens validatie."
+            );
+        }
 
         Intent bridge =
-                InstallerBridgeActivity.createFileInstallIntent(
-                        context,
-                        apk,
-                        expectedVersion
-                );
+                InstallerBridgeActivity
+                        .createFileInstallIntent(
+                                context,
+                                apk,
+                                info.versionName,
+                                info.packageName,
+                                info.displayName
+                        );
 
         context.startActivity(
                 bridge
         );
     }
 
-    static void installMaatje(
+    private static byte[] installedSignerDigest(
             Context context,
-            File apk
-    ) throws Exception {
-        validateMaatjeApk(
-                context,
-                apk
-        );
-
-        PackageInstaller installer =
-                context.getPackageManager()
-                        .getPackageInstaller();
-
-        PackageInstaller.SessionParams params =
-                new PackageInstaller.SessionParams(
-                        PackageInstaller
-                                .SessionParams
-                                .MODE_FULL_INSTALL
-                );
-
-        params.setAppPackageName(
-                KioskPolicy.MAATJE_PACKAGE
-        );
-
-        if (Build.VERSION.SDK_INT >= 26) {
-            params.setInstallReason(
-                    PackageManager
-                            .INSTALL_REASON_USER
-            );
-        }
-
-        if (Build.VERSION.SDK_INT >= 31) {
-            params.setRequireUserAction(
-                    PackageInstaller
-                            .SessionParams
-                            .USER_ACTION_REQUIRED
-            );
-        }
-
-        int sessionId =
-                installer.createSession(
-                        params
-                );
-
-        PackageInstaller.Session session =
-                installer.openSession(
-                        sessionId
-                );
-
-        try {
-            try (
-                    FileInputStream input =
-                            new FileInputStream(apk);
-                    OutputStream output =
-                            session.openWrite(
-                                    "base.apk",
-                                    0,
-                                    apk.length()
-                            )
-            ) {
-                byte[] buffer =
-                        new byte[64 * 1024];
-
-                int read;
-
-                while ((read = input.read(buffer)) > 0) {
-                    output.write(
-                            buffer,
-                            0,
-                            read
-                    );
-                }
-
-                session.fsync(output);
-            }
-
-            Intent resultIntent =
-                    new Intent(
-                            context,
-                            InstallResultReceiver.class
-                    );
-
-            resultIntent.setAction(
-                    ACTION_INSTALL_STATUS
-            );
-
-            int flags =
-                    PendingIntent.FLAG_UPDATE_CURRENT;
-
-            if (Build.VERSION.SDK_INT >= 31) {
-                flags |=
-                        PendingIntent.FLAG_MUTABLE;
-            }
-
-            PendingIntent pendingIntent =
-                    PendingIntent.getBroadcast(
-                            context,
-                            sessionId,
-                            resultIntent,
-                            flags
-                    );
-
-            IntentSender sender =
-                    pendingIntent.getIntentSender();
-
-            session.commit(sender);
-
-        } finally {
-            session.close();
-        }
-    }
-
-    private static byte[] trustedSignerDigest(
-            Context context
+            String packageName
     ) {
         PackageManager pm =
                 context.getPackageManager();
 
         try {
-            PackageInfo maatje =
+            PackageInfo installed =
                     getPackageInfo(
                             pm,
-                            KioskPolicy.MAATJE_PACKAGE,
+                            packageName,
                             false
                     );
 
-            byte[] digest =
-                    firstSignerDigest(
-                            maatje
-                    );
-
-            if (digest != null) {
-                return digest;
-            }
+            return firstSignerDigest(
+                    installed
+            );
 
         } catch (Exception ignored) {}
 
+        /*
+         * Beide apps worden met dezelfde permanente key getekend.
+         * Alleen als het doelpakket niet gevonden wordt, mag Kiosk zelf
+         * als trust anchor dienen.
+         */
         try {
             PackageInfo kiosk =
                     getPackageInfo(
@@ -333,6 +275,7 @@ final class ApkInstaller {
                     && signers.length > 0) {
                 signature = signers[0];
             }
+
         } else if (info.signatures != null
                 && info.signatures.length > 0) {
             signature =

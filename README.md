@@ -1,4 +1,14 @@
-# MAATJE v1.3.2 OnePlus Edition + MAATJE Kiosk v1.0.7
+## MAATJE v1.3.3 + Kiosk v1.0.8 dedicated navigation and dual updater
+
+- MAATJE explicitly enters Lock Task when the Device Owner has allowlisted nl.thommie.ai.
+- Consumes both modern predictive-back callbacks and legacy back presses inside MAATJE only.
+- Re-applies immersive system UI on focus/resume and requests side gesture exclusion on LineageOS.
+- Kiosk/admin screens keep their normal navigation behavior.
+- QR updater now accepts either nl.thommie.ai or nl.thommie.kiosk only.
+- Both update targets must match the signing certificate of the installed app.
+- Kiosk self-updates recover through MY_PACKAGE_REPLACED and re-enter the Device Owner home/lock flow.
+
+# MAATJE v1.3.3 OnePlus Edition + MAATJE Kiosk v1.0.8
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
 

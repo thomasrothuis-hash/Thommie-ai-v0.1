@@ -250,7 +250,7 @@ public class AdminPanelActivity extends Activity {
 
         root.addView(
                 action(
-                        "MAATJE UPDATE ONTVANGEN",
+                        "UPDATE ONTVANGEN • MAATJE / KIOSK",
                         v -> startUpdateServer()
                 ),
                 spacedButtonParams()

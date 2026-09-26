@@ -3,9 +3,11 @@ package nl.thommie.ai;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.admin.DevicePolicyManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioAttributes;
@@ -26,6 +28,8 @@ import android.view.Gravity;
 import android.view.TextureView;
 import android.view.View;
 import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -143,13 +147,10 @@ public class MainActivity extends Activity {
         getWindow().addFlags(
                 WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
         );
-        getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                        | View.SYSTEM_UI_FLAG_FULLSCREEN
-                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-        );
+        installDedicatedNavigationGuards();
 
         buildUi();
+        enforceDedicatedUi();
         initSpeechRecognizer();
 
         audioManager =
@@ -331,7 +332,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v1.3.2-oneplus  •  ONEPLUS EDITION • PERSONAL AI TERMINAL"
+                "v1.3.3-oneplus  •  ONEPLUS EDITION • PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -2397,7 +2398,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle(
-                        "MAATJE v1.3.2 ONEPLUS – Instellingen"
+                        "MAATJE v1.3.3 ONEPLUS – Instellingen"
                 )
                 .setItems(
                         options,
@@ -2522,7 +2523,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.3.2 ONEPLUS – Geheugen"
+                                "MAATJE v1.3.3 ONEPLUS – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -2612,7 +2613,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.3.2 ONEPLUS – API"
+                                "MAATJE v1.3.3 ONEPLUS – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -3575,9 +3576,154 @@ public class MainActivity extends Activity {
         endCommunicationAudio();
     }
 
+    @SuppressWarnings("deprecation")
+    private void installDedicatedNavigationGuards() {
+        View decor =
+                getWindow().getDecorView();
+
+        decor.setOnSystemUiVisibilityChangeListener(
+                visibility ->
+                        mainHandler.postDelayed(
+                                this::enforceDedicatedUi,
+                                45L
+                        )
+        );
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            getOnBackInvokedDispatcher()
+                    .registerOnBackInvokedCallback(
+                            android.window.OnBackInvokedDispatcher
+                                    .PRIORITY_DEFAULT,
+                            this::enforceDedicatedUi
+                    );
+        }
+    }
+
+    private void ensureDedicatedLockTask() {
+        try {
+            DevicePolicyManager dpm =
+                    (DevicePolicyManager)
+                            getSystemService(
+                                    DEVICE_POLICY_SERVICE
+                            );
+
+            if (dpm != null
+                    && dpm.isLockTaskPermitted(
+                    getPackageName()
+            )) {
+                startLockTask();
+            }
+        } catch (Exception ignored) {}
+    }
+
+    @SuppressWarnings("deprecation")
+    private void enforceDedicatedUi() {
+        View decor =
+                getWindow().getDecorView();
+
+        int flags =
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+
+        decor.setSystemUiVisibility(
+                flags
+        );
+
+        if (Build.VERSION.SDK_INT >= 30) {
+            getWindow().setDecorFitsSystemWindows(
+                    false
+            );
+
+            WindowInsetsController controller =
+                    getWindow().getInsetsController();
+
+            if (controller != null) {
+                controller.hide(
+                        WindowInsets.Type.statusBars()
+                                | WindowInsets.Type.navigationBars()
+                );
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= 29) {
+            decor.post(
+                    () -> {
+                        int width =
+                                decor.getWidth();
+                        int height =
+                                decor.getHeight();
+
+                        if (width <= 0
+                                || height <= 0) {
+                            return;
+                        }
+
+                        int edge =
+                                Math.max(
+                                        dp(36),
+                                        width / 12
+                                );
+
+                        ArrayList<Rect> exclusions =
+                                new ArrayList<>();
+
+                        exclusions.add(
+                                new Rect(
+                                        0,
+                                        0,
+                                        edge,
+                                        height
+                                )
+                        );
+
+                        exclusions.add(
+                                new Rect(
+                                        width - edge,
+                                        0,
+                                        width,
+                                        height
+                                )
+                        );
+
+                        decor.setSystemGestureExclusionRects(
+                                exclusions
+                        );
+                    }
+            );
+        }
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onBackPressed() {
+        // Dedicated terminal: back navigation is intentionally disabled.
+        enforceDedicatedUi();
+    }
+
+    @Override
+    public void onWindowFocusChanged(
+            boolean hasFocus
+    ) {
+        super.onWindowFocusChanged(
+                hasFocus
+        );
+
+        if (hasFocus) {
+            ensureDedicatedLockTask();
+            enforceDedicatedUi();
+        }
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
+
+        ensureDedicatedLockTask();
+        enforceDedicatedUi();
 
         appVisible = true;
         wakeWordEnabled =

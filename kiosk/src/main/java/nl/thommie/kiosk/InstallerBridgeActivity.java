@@ -26,6 +26,10 @@ public class InstallerBridgeActivity
             "apk_path";
     private static final String EXTRA_EXPECTED_VERSION =
             "expected_version";
+    private static final String EXTRA_TARGET_PACKAGE =
+            "target_package";
+    private static final String EXTRA_TARGET_LABEL =
+            "target_label";
 
     private static final int BG =
             Color.rgb(4, 8, 5);
@@ -49,7 +53,9 @@ public class InstallerBridgeActivity
     static Intent createFileInstallIntent(
             android.content.Context context,
             File apk,
-            String expectedVersion
+            String expectedVersion,
+            String targetPackage,
+            String targetLabel
     ) {
         Intent intent =
                 new Intent(
@@ -64,6 +70,14 @@ public class InstallerBridgeActivity
         intent.putExtra(
                 EXTRA_EXPECTED_VERSION,
                 expectedVersion
+        );
+        intent.putExtra(
+                EXTRA_TARGET_PACKAGE,
+                targetPackage
+        );
+        intent.putExtra(
+                EXTRA_TARGET_LABEL,
+                targetLabel
         );
 
         intent.addFlags(
@@ -113,7 +127,8 @@ public class InstallerBridgeActivity
         statusView.setText(
                 "WACHTEN OP INSTALLATIE\n\n"
                         + "Rond alle Android- en Play Protect-bevestigingen af.\n\n"
-                        + "MAATJE controleert zelf wanneer de nieuwe versie echt geïnstalleerd is."
+                        + targetLabel()
+                        + " controleert zelf wanneer de nieuwe versie echt geïnstalleerd is."
         );
 
         startVersionPolling();
@@ -233,7 +248,9 @@ public class InstallerBridgeActivity
                         if (isExpectedVersionInstalled()) {
                             statusView.setText(
                                     "UPDATE GELUKT\n\n"
-                                            + "Nieuwe MAATJE-versie gedetecteerd. Kiosk wordt opnieuw vergrendeld."
+                                            + "Nieuwe "
+                                            + targetLabel()
+                                            + "-versie gedetecteerd. Kiosk wordt opnieuw vergrendeld."
                             );
 
                             handler.postDelayed(
@@ -251,6 +268,30 @@ public class InstallerBridgeActivity
                     }
                 }
         );
+    }
+
+    private String targetPackage() {
+        String value =
+                getIntent().getStringExtra(
+                        EXTRA_TARGET_PACKAGE
+                );
+
+        return value == null
+                || value.trim().isEmpty()
+                ? KioskPolicy.MAATJE_PACKAGE
+                : value;
+    }
+
+    private String targetLabel() {
+        String value =
+                getIntent().getStringExtra(
+                        EXTRA_TARGET_LABEL
+                );
+
+        return value == null
+                || value.trim().isEmpty()
+                ? "MAATJE"
+                : value;
     }
 
     private boolean isExpectedVersionInstalled() {
@@ -271,7 +312,7 @@ public class InstallerBridgeActivity
                 info =
                         getPackageManager()
                                 .getPackageInfo(
-                                        KioskPolicy.MAATJE_PACKAGE,
+                                        targetPackage(),
                                         android.content.pm.PackageManager
                                                 .PackageInfoFlags
                                                 .of(0)
@@ -280,7 +321,7 @@ public class InstallerBridgeActivity
                 info =
                         getPackageManager()
                                 .getPackageInfo(
-                                        KioskPolicy.MAATJE_PACKAGE,
+                                        targetPackage(),
                                         0
                                 );
             }

@@ -315,31 +315,33 @@ final class UpdateServer {
             file.flush();
         }
 
-        String version =
+        ApkInstaller.ValidatedApk info =
                 ApkInstaller
-                        .validateMaatjeApk(
+                        .validateUpdateApk(
                                 context,
                                 target
                         );
 
         callback.onStatus(
-                "MAATJE "
-                        + version
+                info.displayName
+                        + " "
+                        + info.versionName
                         + " gevalideerd. Normale Android-installer openen..."
         );
 
-        ApkInstaller.launchManualMaatjeInstall(
+        ApkInstaller.launchManualInstall(
                 context,
                 target,
-                version
+                info
         );
 
         sendText(
                 output,
                 200,
-                "MAATJE "
-                        + version
-                        + " ontvangen en gecontroleerd. Rond de installatie op de OnePlus af."
+                info.displayName
+                        + " "
+                        + info.versionName
+                        + " ontvangen en gecontroleerd. Rond de installatie op de telefoon af."
         );
 
         running = false;
@@ -572,9 +574,9 @@ final class UpdateServer {
                 + "button{padding:14px;background:#36dc68;border:0;border-radius:12px;font-weight:bold}"
                 + "input{margin:20px 0;width:100%}</style></head><body>"
                 + "<h2>MAATJE update</h2>"
-                + "<p>Kies de nieuwe gesigneerde MAATJE APK.</p>"
+                + "<p>Kies een nieuwe gesigneerde MAATJE of MAATJE Kiosk APK.</p>"
                 + "<input id='f' type='file' accept='.apk,application/vnd.android.package-archive'>"
-                + "<button onclick='u()'>Upload naar OnePlus</button>"
+                + "<button onclick='u()'>Upload naar MAATJE-terminal</button>"
                 + "<p id='s'></p>"
                 + "<script>async function u(){const f=document.getElementById('f').files[0];"
                 + "if(!f){alert('Kies eerst een APK');return;}document.getElementById('s').innerText='Uploaden...';"

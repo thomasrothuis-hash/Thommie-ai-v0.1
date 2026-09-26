@@ -1,3 +1,12 @@
+## MAATJE v1.3.7 universal realtime device bridge
+
+- Adds a Realtime function tool control_device for local phone status and actions.
+- Realtime must use local Android data instead of guessing for battery, charging, temperature, storage, network, device info, volume and brightness.
+- Reuses the existing DeviceControl parser for timers, alarms, torch, volume, brightness, battery, app opening and device info while MainActivity is active.
+- Reuses the Kiosk Device Owner bridge for Wi-Fi, Bluetooth and location.
+- Adds a context-safe fallback for the background assistant overlay.
+- Adds read-only Wi-Fi, Bluetooth and location status questions so status checks do not accidentally toggle settings.
+
 ## MAATJE v1.3.6 AOD wake + local device telemetry
 
 - AOD now owns a dedicated local Vosk wake-word listener while visible.
@@ -37,7 +46,7 @@
 - Both update targets must match the signing certificate of the installed app.
 - Kiosk self-updates recover through MY_PACKAGE_REPLACED and re-enter the Device Owner home/lock flow.
 
-# MAATJE v1.3.6 OnePlus Edition + MAATJE Kiosk v1.0.9
+# MAATJE v1.3.7 OnePlus Edition + MAATJE Kiosk v1.0.9
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
 

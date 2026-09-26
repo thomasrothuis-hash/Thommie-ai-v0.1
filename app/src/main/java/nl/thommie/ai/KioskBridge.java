@@ -6,6 +6,10 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothManager;
+import android.location.LocationManager;
+import android.net.wifi.WifiManager;
 import android.widget.Toast;
 
 import java.util.Locale;
@@ -67,6 +71,25 @@ final class KioskBridge {
         if (q.contains("wifi")
                 && !q.contains("open")
                 && !q.contains("instelling")) {
+            if (isStatusQuestion(q, "wifi")) {
+                try {
+                    WifiManager wifi =
+                            (WifiManager)
+                                    context.getSystemService(
+                                            Context.WIFI_SERVICE
+                                    );
+
+                    boolean enabled =
+                            wifi != null
+                                    && wifi.isWifiEnabled();
+
+                    return enabled
+                            ? "Wi-Fi staat aan."
+                            : "Wi-Fi staat uit.";
+                } catch (Exception e) {
+                    return "Ik kon de Wi-Fi-status niet uitlezen.";
+                }
+            }
             if (containsOn(q)) {
                 sendCommand(
                         context,
@@ -87,6 +110,30 @@ final class KioskBridge {
         if (q.contains("bluetooth")
                 && !q.contains("open")
                 && !q.contains("instelling")) {
+            if (isStatusQuestion(q, "bluetooth")) {
+                try {
+                    BluetoothManager manager =
+                            (BluetoothManager)
+                                    context.getSystemService(
+                                            Context.BLUETOOTH_SERVICE
+                                    );
+
+                    BluetoothAdapter adapter =
+                            manager == null
+                                    ? null
+                                    : manager.getAdapter();
+
+                    boolean enabled =
+                            adapter != null
+                                    && adapter.isEnabled();
+
+                    return enabled
+                            ? "Bluetooth staat aan."
+                            : "Bluetooth staat uit.";
+                } catch (Exception e) {
+                    return "Ik kon de Bluetooth-status niet uitlezen.";
+                }
+            }
             if (containsOn(q)) {
                 sendCommand(
                         context,
@@ -108,6 +155,26 @@ final class KioskBridge {
                 || q.contains("gps"))
                 && !q.contains("open")
                 && !q.contains("instelling")) {
+            if (isStatusQuestion(q, "locatie")
+                    || isStatusQuestion(q, "gps")) {
+                try {
+                    LocationManager location =
+                            (LocationManager)
+                                    context.getSystemService(
+                                            Context.LOCATION_SERVICE
+                                    );
+
+                    boolean enabled =
+                            location != null
+                                    && location.isLocationEnabled();
+
+                    return enabled
+                            ? "Locatie staat aan."
+                            : "Locatie staat uit.";
+                } catch (Exception e) {
+                    return "Ik kon de locatiestatus niet uitlezen.";
+                }
+            }
             if (containsOn(q)) {
                 sendCommand(
                         context,
@@ -361,6 +428,18 @@ final class KioskBridge {
         context.sendBroadcast(
                 intent
         );
+    }
+
+    private static boolean isStatusQuestion(
+            String q,
+            String subject
+    ) {
+        return q.contains(subject + " status")
+                || q.contains("status " + subject)
+                || q.contains("staat " + subject)
+                || q.contains("is " + subject)
+                || q.contains(subject + " aan of uit")
+                || q.contains(subject + " ingeschakeld");
     }
 
     private static boolean containsOn(

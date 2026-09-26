@@ -69,6 +69,84 @@ final class DeviceControl {
 
     private DeviceControl() {}
 
+    static CommandResult handlePassiveCommand(
+            Context context,
+            String raw
+    ) {
+        if (raw == null
+                || raw.trim().isEmpty()) {
+            return CommandResult.no();
+        }
+
+        String q =
+                normalize(raw);
+
+        String kioskResult =
+                KioskBridge.handleVoiceCommand(
+                        context,
+                        raw
+                );
+
+        if (kioskResult != null) {
+            return new CommandResult(
+                    true,
+                    kioskResult,
+                    "DEVICE • KIOSK"
+            );
+        }
+
+        CommandResult volume =
+                handleVolume(
+                        context,
+                        q
+                );
+
+        if (volume.handled) {
+            return volume;
+        }
+
+        CommandResult brightness =
+                handleBrightness(
+                        context,
+                        q
+                );
+
+        if (brightness.handled) {
+            return brightness;
+        }
+
+        CommandResult battery =
+                handleBattery(
+                        context,
+                        q
+                );
+
+        if (battery.handled) {
+            return battery;
+        }
+
+        CommandResult systemStatus =
+                handleSystemStatus(
+                        context,
+                        q
+                );
+
+        if (systemStatus.handled) {
+            return systemStatus;
+        }
+
+        CommandResult info =
+                handleDeviceInfo(
+                        q
+                );
+
+        if (info.handled) {
+            return info;
+        }
+
+        return CommandResult.no();
+    }
+
     static CommandResult handleCommand(
             Activity activity,
             String raw
@@ -226,7 +304,7 @@ final class DeviceControl {
         AlertDialog dialog =
                 new AlertDialog.Builder(activity)
                         .setTitle(
-                                "MAATJE v1.3.6 ONEPLUS – Toestelbediening"
+                                "MAATJE v1.3.7 ONEPLUS – Toestelbediening"
                         )
                         .setMessage(message)
                         .setPositiveButton(
@@ -707,7 +785,7 @@ final class DeviceControl {
     }
 
     private static CommandResult handleVolume(
-            Activity activity,
+            Context activity,
             String q
     ) {
         boolean mentionsVolume =
@@ -830,7 +908,7 @@ final class DeviceControl {
     }
 
     private static CommandResult handleBrightness(
-            Activity activity,
+            Context activity,
             String q
     ) {
         boolean mentionsBrightness =
@@ -901,13 +979,21 @@ final class DeviceControl {
         }
 
         if (!Settings.System.canWrite(activity)) {
-            requestWriteSettings(
-                    activity
-            );
+            if (activity instanceof Activity) {
+                requestWriteSettings(
+                        (Activity) activity
+                );
+
+                return new CommandResult(
+                        true,
+                        "Voor systeembrede helderheid heb ik éénmalig toestemming nodig om systeeminstellingen te wijzigen. Die pagina heb ik nu geopend.",
+                        "DEVICE • PERMISSION"
+                );
+            }
 
             return new CommandResult(
                     true,
-                    "Voor systeembrede helderheid heb ik éénmalig toestemming nodig om systeeminstellingen te wijzigen. Die pagina heb ik nu geopend.",
+                    "Ik kan de huidige helderheid wel uitlezen, maar aanpassen vereist de hoofd-MAATJE interface.",
                     "DEVICE • PERMISSION"
             );
         }
@@ -992,7 +1078,7 @@ final class DeviceControl {
     }
 
     private static CommandResult handleBattery(
-            Activity activity,
+            Context activity,
             String q
     ) {
         boolean mentionsBattery =
@@ -1104,7 +1190,7 @@ final class DeviceControl {
     }
 
     private static CommandResult handleSystemStatus(
-            Activity activity,
+            Context activity,
             String q
     ) {
         boolean asksStorage =

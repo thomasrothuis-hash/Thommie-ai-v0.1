@@ -1,5 +1,6 @@
 package nl.thommie.ai;
 
+import android.app.Activity;
 import android.content.Context;
 import android.media.AudioAttributes;
 import android.media.AudioDeviceInfo;
@@ -10,6 +11,8 @@ import android.media.AudioTrack;
 import android.media.MediaRecorder;
 import android.media.audiofx.AcousticEchoCanceler;
 import android.media.audiofx.NoiseSuppressor;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Base64;
 
@@ -17,8 +20,10 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayDeque;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -47,7 +52,13 @@ final class RealtimeVoiceClient {
     private static final int MIC_CHUNK_SAMPLES = 960;
 
     private final Context context;
+    private final Activity activityContext;
     private final Listener listener;
+
+    private final Handler mainHandler =
+            new Handler(
+                    Looper.getMainLooper()
+            );
 
     private final AtomicBoolean running =
             new AtomicBoolean(false);
@@ -100,6 +111,10 @@ final class RealtimeVoiceClient {
             Context context,
             Listener listener
     ) {
+        this.activityContext =
+                context instanceof Activity
+                        ? (Activity) context
+                        : null;
         this.context =
                 context.getApplicationContext();
         this.listener = listener;
@@ -676,20 +691,23 @@ final class RealtimeVoiceClient {
                     InternetSettings.enabled(context);
 
             String sessionInstructions =
-                    instructions;
+                    instructions
+                            + "\n\nJe hebt een lokale tool control_device voor DEZE telefoon. "
+                            + "Gebruik control_device ALTIJD voordat je antwoordt op een vraag over de huidige toestelstatus "
+                            + "of voordat je een toestelactie uitvoert. Voorbeelden: batterijpercentage, opladen, batterijtemperatuur, "
+                            + "opslag, internet/netwerk, toestelinfo, Android-versie, volume, helderheid, zaklamp, Wi-Fi, Bluetooth, locatie, "
+                            + "timers, wekkers en apps openen. Raad deze waarden nooit zelf en zeg niet dat je ze niet kunt zien voordat je "
+                            + "control_device hebt geprobeerd. Geef de natuurlijke opdracht van de gebruiker vrijwel letterlijk door als command. "
+                            + "Wacht op het toolresultaat en gebruik dat als waarheid.";
 
             if (internetEnabled) {
                 sessionInstructions +=
-                        "\n\nJe hebt een tool search_internet. "
-                                + "Gebruik die ALTIJD voor actuele of veranderlijke informatie, "
-                                + "zoals weer, nieuws, prijzen, koersen, verkeer, openingstijden, "
-                                + "sportuitslagen en wanneer de gebruiker expliciet vraagt iets online op te zoeken. "
-                                + "Zeg nooit dat je geen internettoegang hebt zolang deze tool beschikbaar is. "
-                                + "Wacht op het toolresultaat en geef daarna pas het inhoudelijke antwoord.";
+                        "\n\nJe hebt ook search_internet. Gebruik die ALTIJD voor actuele of veranderlijke externe informatie, "
+                                + "zoals weer, nieuws, prijzen, koersen, verkeer, openingstijden, sportuitslagen en expliciete online zoekvragen. "
+                                + "Zeg nooit dat je geen internettoegang hebt zolang deze tool beschikbaar is.";
             } else {
                 sessionInstructions +=
-                        "\n\nInternet zoeken staat lokaal uit. "
-                                + "Gebruik geen live internetinformatie en zeg dat internet zoeken uit staat als actuele data nodig is.";
+                        "\n\nInternet zoeken staat lokaal uit. Gebruik geen live externe internetinformatie.";
             }
 
             JSONObject session =
@@ -723,6 +741,55 @@ final class RealtimeVoiceClient {
                                     "instructions",
                                     sessionInstructions
                             );
+
+            JSONObject commandProperty =
+                    new JSONObject()
+                            .put("type", "string")
+                            .put(
+                                    "description",
+                                    "De natuurlijke toestelvraag of toestelopdracht van de gebruiker, zo letterlijk mogelijk."
+                            );
+
+            JSONObject deviceParameters =
+                    new JSONObject()
+                            .put("type", "object")
+                            .put(
+                                    "properties",
+                                    new JSONObject()
+                                            .put(
+                                                    "command",
+                                                    commandProperty
+                                            )
+                            )
+                            .put(
+                                    "required",
+                                    new JSONArray()
+                                            .put("command")
+                            )
+                            .put(
+                                    "additionalProperties",
+                                    false
+                            );
+
+            JSONObject deviceTool =
+                    new JSONObject()
+                            .put("type", "function")
+                            .put(
+                                    "name",
+                                    "control_device"
+                            )
+                            .put(
+                                    "description",
+                                    "Lees lokale status van deze telefoon uit of voer een lokale toestelactie uit. Gebruik dit voor batterij, laden, temperatuur, opslag, netwerk/internet, toestelinfo, volume, helderheid, zaklamp, Wi-Fi, Bluetooth, locatie, timers, wekkers en apps."
+                            )
+                            .put(
+                                    "parameters",
+                                    deviceParameters
+                            );
+
+            JSONArray tools =
+                    new JSONArray()
+                            .put(deviceTool);
 
             if (internetEnabled) {
                 JSONObject queryProperty =
@@ -763,23 +830,26 @@ final class RealtimeVoiceClient {
                                 )
                                 .put(
                                         "description",
-                                        "Zoek live op internet naar actuele of externe informatie. Gebruik dit voor weer, nieuws, prijzen, koersen, verkeer, openingstijden, sportuitslagen en expliciete online zoekvragen."
+                                        "Zoek live op internet naar actuele of externe informatie."
                                 )
                                 .put(
                                         "parameters",
                                         parameters
                                 );
 
-                session.put(
-                        "tools",
-                        new JSONArray()
-                                .put(internetTool)
-                );
-                session.put(
-                        "tool_choice",
-                        "auto"
+                tools.put(
+                        internetTool
                 );
             }
+
+            session.put(
+                    "tools",
+                    tools
+            );
+            session.put(
+                    "tool_choice",
+                    "auto"
+            );
 
             send(
                     new JSONObject()
@@ -1265,8 +1335,7 @@ final class RealtimeVoiceClient {
             String callId =
                     item.optString("call_id", "");
 
-            if (!"search_internet".equals(name)
-                    || callId.isEmpty()) {
+            if (callId.isEmpty()) {
                 continue;
             }
 
@@ -1276,17 +1345,193 @@ final class RealtimeVoiceClient {
                             "{}"
                     );
 
-            toolExecutor.submit(() ->
-                    executeInternetTool(
-                            callId,
-                            arguments
-                    )
-            );
+            if ("control_device".equals(name)) {
+                toolExecutor.submit(() ->
+                        executeDeviceTool(
+                                callId,
+                                arguments
+                        )
+                );
 
-            return true;
+                return true;
+            }
+
+            if ("search_internet".equals(name)) {
+                toolExecutor.submit(() ->
+                        executeInternetTool(
+                                callId,
+                                arguments
+                        )
+                );
+
+                return true;
+            }
         }
 
         return false;
+    }
+
+    private void executeDeviceTool(
+            String callId,
+            String arguments
+    ) {
+        String output;
+
+        try {
+            JSONObject args =
+                    new JSONObject(
+                            arguments == null
+                                    ? "{}"
+                                    : arguments
+                    );
+
+            String command =
+                    args.optString(
+                            "command",
+                            ""
+                    ).trim();
+
+            if (command.isEmpty()) {
+                throw new Exception(
+                        "De realtime-tool gaf geen toestelopdracht door."
+                );
+            }
+
+            DeviceControl.CommandResult result =
+                    runDeviceCommand(
+                            command
+                    );
+
+            if (result == null
+                    || !result.handled) {
+                output =
+                        "Deze toestelopdracht wordt nog niet lokaal ondersteund: "
+                                + command;
+            } else {
+                output =
+                        result.message;
+            }
+
+        } catch (Exception e) {
+            output =
+                    "Lokale toestelactie mislukt: "
+                            + safeMessage(e);
+        }
+
+        sendToolOutput(
+                callId,
+                output
+        );
+    }
+
+    private DeviceControl.CommandResult runDeviceCommand(
+            String command
+    ) throws Exception {
+        if (activityContext == null) {
+            return DeviceControl.handlePassiveCommand(
+                    context,
+                    command
+            );
+        }
+
+        final DeviceControl.CommandResult[] holder =
+                new DeviceControl.CommandResult[1];
+
+        CountDownLatch latch =
+                new CountDownLatch(1);
+
+        mainHandler.post(() -> {
+            try {
+                holder[0] =
+                        DeviceControl.handleCommand(
+                                activityContext,
+                                command
+                        );
+            } finally {
+                latch.countDown();
+            }
+        });
+
+        boolean completed =
+                latch.await(
+                        6,
+                        TimeUnit.SECONDS
+                );
+
+        if (!completed) {
+            throw new Exception(
+                    "Android reageerde niet op tijd op de toestelopdracht."
+            );
+        }
+
+        return holder[0];
+    }
+
+    private void sendToolOutput(
+            String callId,
+            String output
+    ) {
+        if (!running.get()
+                || !socketReady.get()) {
+            return;
+        }
+
+        try {
+            JSONObject item =
+                    new JSONObject()
+                            .put(
+                                    "type",
+                                    "function_call_output"
+                            )
+                            .put(
+                                    "call_id",
+                                    callId
+                            )
+                            .put(
+                                    "output",
+                                    output == null
+                                            ? ""
+                                            : output
+                            );
+
+            send(
+                    new JSONObject()
+                            .put(
+                                    "type",
+                                    "conversation.item.create"
+                            )
+                            .put(
+                                    "item",
+                                    item
+                            )
+            );
+
+            send(
+                    new JSONObject()
+                            .put(
+                                    "type",
+                                    "response.create"
+                            )
+                            .put(
+                                    "response",
+                                    new JSONObject()
+                                            .put(
+                                                    "output_modalities",
+                                                    new JSONArray()
+                                                            .put("audio")
+                                            )
+                                            .put(
+                                                    "tool_choice",
+                                                    "none"
+                                            )
+                            )
+            );
+
+        } catch (Exception e) {
+            listener.onError(
+                    safeMessage(e)
+            );
+        }
     }
 
     private void executeInternetTool(

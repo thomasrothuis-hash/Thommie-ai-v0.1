@@ -242,7 +242,7 @@ final class UsageTracker {
 
         new AlertDialog.Builder(activity)
                 .setTitle(
-                        "MAATJE v1.3.6 ONEPLUS – Gebruik & tokens"
+                        "MAATJE v1.3.7 ONEPLUS – Gebruik & tokens"
                 )
                 .setMessage(message)
                 .setPositiveButton(

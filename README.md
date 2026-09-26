@@ -1,3 +1,10 @@
+## MAATJE v1.3.5 AOD trigger fix
+
+- Fixes AOD never activating while MAATJE is in local Hey Maatje wake-word standby.
+- Wake-word standby no longer counts as active interaction for the AOD idle timer.
+- Command listening, active responses, realtime speech and camera still block AOD as intended.
+- Once AOD opens, MainActivity pauses and the existing background VoiceInteractionService wake-word listener takes over.
+
 ## MAATJE v1.3.4 + Kiosk v1.0.9 UI, sleep and wake update
 
 - Replaces the main MAATJE settings list with a custom full-screen MAATJE control-center UI.
@@ -21,7 +28,7 @@
 - Both update targets must match the signing certificate of the installed app.
 - Kiosk self-updates recover through MY_PACKAGE_REPLACED and re-enter the Device Owner home/lock flow.
 
-# MAATJE v1.3.4 OnePlus Edition + MAATJE Kiosk v1.0.9
+# MAATJE v1.3.5 OnePlus Edition + MAATJE Kiosk v1.0.9
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
 

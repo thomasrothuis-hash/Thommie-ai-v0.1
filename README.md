@@ -1,3 +1,12 @@
+## MAATJE v1.3.6 AOD wake + local device telemetry
+
+- AOD now owns a dedicated local Vosk wake-word listener while visible.
+- Background VoiceInteractionService wake listener pauses during AOD to avoid microphone contention.
+- Hey Maatje from AOD returns to MainActivity with assistant invocation and starts voice immediately.
+- Battery questions accept natural phrases such as hoeveel procent heb je nog and ben je aan het opladen.
+- Adds local toestelstatus queries for battery, charge state, temperature, validated network, free storage, media volume, brightness, Android version and uptime.
+- Adds direct local storage and internet-status questions without going through OpenAI.
+
 ## MAATJE v1.3.5 AOD trigger fix
 
 - Fixes AOD never activating while MAATJE is in local Hey Maatje wake-word standby.
@@ -28,7 +37,7 @@
 - Both update targets must match the signing certificate of the installed app.
 - Kiosk self-updates recover through MY_PACKAGE_REPLACED and re-enter the Device Owner home/lock flow.
 
-# MAATJE v1.3.5 OnePlus Edition + MAATJE Kiosk v1.0.9
+# MAATJE v1.3.6 OnePlus Edition + MAATJE Kiosk v1.0.9
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
 

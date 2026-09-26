@@ -369,7 +369,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v1.3.5-oneplus  •  ONEPLUS EDITION • PERSONAL AI TERMINAL"
+                "v1.3.6-oneplus  •  ONEPLUS EDITION • PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -2593,7 +2593,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.3.5 ONEPLUS – Geheugen"
+                                "MAATJE v1.3.6 ONEPLUS – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -2683,7 +2683,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.3.5 ONEPLUS – API"
+                                "MAATJE v1.3.6 ONEPLUS – API"
                         )
                         .setView(box)
                         .setPositiveButton(

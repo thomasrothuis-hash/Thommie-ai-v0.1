@@ -25,6 +25,9 @@ public class MaatjeVoiceInteractionService
     private static volatile
     boolean sessionVisible = false;
 
+    private static volatile
+    boolean aodVisible = false;
+
     private final Handler handler =
             new Handler(
                     Looper.getMainLooper()
@@ -116,6 +119,13 @@ public class MaatjeVoiceInteractionService
         refreshInstance();
     }
 
+    static void setAodVisible(
+            boolean visible
+    ) {
+        aodVisible = visible;
+        refreshInstance();
+    }
+
     static void claimMicrophoneForSession() {
         sessionVisible = true;
 
@@ -152,6 +162,7 @@ public class MaatjeVoiceInteractionService
         boolean shouldListen =
                 !activityVisible
                         && !sessionVisible
+                        && !aodVisible
                         && WakeWordSettings.enabled(
                                 this
                         )

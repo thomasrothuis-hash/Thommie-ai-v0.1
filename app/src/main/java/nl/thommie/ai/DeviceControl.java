@@ -13,9 +13,15 @@ import android.content.pm.ResolveInfo;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.media.AudioManager;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.BatteryManager;
 import android.os.Build;
+import android.os.Environment;
+import android.os.StatFs;
+import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.provider.Settings;
 
@@ -140,6 +146,16 @@ final class DeviceControl {
             return battery;
         }
 
+        CommandResult systemStatus =
+                handleSystemStatus(
+                        activity,
+                        q
+                );
+
+        if (systemStatus.handled) {
+            return systemStatus;
+        }
+
         CommandResult directOpen =
                 handleDirectOpen(
                         activity,
@@ -210,7 +226,7 @@ final class DeviceControl {
         AlertDialog dialog =
                 new AlertDialog.Builder(activity)
                         .setTitle(
-                                "MAATJE v1.3.5 ONEPLUS – Toestelbediening"
+                                "MAATJE v1.3.6 ONEPLUS – Toestelbediening"
                         )
                         .setMessage(message)
                         .setPositiveButton(
@@ -981,7 +997,17 @@ final class DeviceControl {
     ) {
         boolean mentionsBattery =
                 q.contains("batterij")
-                        || q.contains("accu");
+                        || q.contains("accu")
+                        || q.contains("battery")
+                        || q.contains("hoeveel procent heb je")
+                        || q.contains("hoeveel procent zit je")
+                        || q.contains("hoeveel procent ben je")
+                        || q.contains("hoeveel procent nog")
+                        || q.contains("hoe vol zit je")
+                        || q.contains("hoe vol ben je")
+                        || q.contains("hoeveel stroom heb je")
+                        || q.contains("ben je aan het opladen")
+                        || q.contains("laad je op");
 
         if (!mentionsBattery) {
             return CommandResult.no();
@@ -1074,6 +1100,378 @@ final class DeviceControl {
                 "DEVICE • BATTERY "
                         + capacity
                         + "%"
+        );
+    }
+
+    private static CommandResult handleSystemStatus(
+            Activity activity,
+            String q
+    ) {
+        boolean asksStorage =
+                q.contains("opslag")
+                        && (
+                        q.contains("hoeveel")
+                                || q.contains("vrij")
+                                || q.contains("status")
+                                || q.contains("ruimte")
+                );
+
+        boolean asksNetwork =
+                q.contains("heb je internet")
+                        || q.contains("internetverbinding")
+                        || q.contains("netwerkstatus")
+                        || q.contains("ben je verbonden")
+                        || q.contains("wifi status")
+                        || q.contains("wi fi status");
+
+        boolean asksFullStatus =
+                q.contains("toestelstatus")
+                        || q.contains("telefoonstatus")
+                        || q.contains("systeemstatus")
+                        || q.contains("status van je telefoon")
+                        || q.contains("status van het toestel")
+                        || q.contains("hoe gaat het met je telefoon");
+
+        if (!asksStorage
+                && !asksNetwork
+                && !asksFullStatus) {
+            return CommandResult.no();
+        }
+
+        long totalBytes = 0L;
+        long freeBytes = 0L;
+
+        try {
+            StatFs stat =
+                    new StatFs(
+                            Environment
+                                    .getDataDirectory()
+                                    .getAbsolutePath()
+                    );
+
+            totalBytes =
+                    stat.getTotalBytes();
+
+            freeBytes =
+                    stat.getAvailableBytes();
+
+        } catch (Exception ignored) {}
+
+        ConnectivityManager cm =
+                (ConnectivityManager)
+                        activity.getSystemService(
+                                Context.CONNECTIVITY_SERVICE
+                        );
+
+        boolean online = false;
+        String networkName =
+                "geen verbinding";
+
+        try {
+            if (cm != null) {
+                Network active =
+                        cm.getActiveNetwork();
+
+                NetworkCapabilities caps =
+                        active == null
+                                ? null
+                                : cm.getNetworkCapabilities(
+                                        active
+                                );
+
+                if (caps != null) {
+                    online =
+                            caps.hasCapability(
+                                    NetworkCapabilities
+                                            .NET_CAPABILITY_INTERNET
+                            )
+                                    && caps.hasCapability(
+                                    NetworkCapabilities
+                                            .NET_CAPABILITY_VALIDATED
+                            );
+
+                    if (caps.hasTransport(
+                            NetworkCapabilities
+                                    .TRANSPORT_WIFI
+                    )) {
+                        networkName =
+                                "Wi-Fi";
+                    } else if (caps.hasTransport(
+                            NetworkCapabilities
+                                    .TRANSPORT_CELLULAR
+                    )) {
+                        networkName =
+                                "mobiele data";
+                    } else if (caps.hasTransport(
+                            NetworkCapabilities
+                                    .TRANSPORT_ETHERNET
+                    )) {
+                        networkName =
+                                "ethernet";
+                    } else {
+                        networkName =
+                                "netwerk";
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
+        if (asksStorage
+                && !asksFullStatus) {
+            if (totalBytes <= 0L) {
+                return new CommandResult(
+                        true,
+                        "Ik kon de opslagstatus niet uitlezen.",
+                        "DEVICE • STORAGE"
+                );
+            }
+
+            return new CommandResult(
+                    true,
+                    "Er is "
+                            + formatGigabytes(
+                            freeBytes
+                    )
+                            + " GB vrij van "
+                            + formatGigabytes(
+                            totalBytes
+                    )
+                            + " GB opslag.",
+                    "DEVICE • STORAGE"
+            );
+        }
+
+        if (asksNetwork
+                && !asksFullStatus) {
+            return new CommandResult(
+                    true,
+                    online
+                            ? "Ja. Ik heb internet via "
+                            + networkName
+                            + "."
+                            : "Nee, ik zie momenteel geen gevalideerde internetverbinding.",
+                    "DEVICE • NETWORK"
+            );
+        }
+
+        BatteryManager batteryManager =
+                (BatteryManager)
+                        activity.getSystemService(
+                                Context.BATTERY_SERVICE
+                        );
+
+        int capacity =
+                batteryManager == null
+                        ? -1
+                        : batteryManager.getIntProperty(
+                                BatteryManager
+                                        .BATTERY_PROPERTY_CAPACITY
+                        );
+
+        Intent batteryIntent =
+                activity.registerReceiver(
+                        null,
+                        new IntentFilter(
+                                Intent.ACTION_BATTERY_CHANGED
+                        )
+                );
+
+        boolean charging = false;
+        float temperature = -1f;
+
+        if (batteryIntent != null) {
+            int state =
+                    batteryIntent.getIntExtra(
+                            BatteryManager
+                                    .EXTRA_STATUS,
+                            -1
+                    );
+
+            charging =
+                    state
+                            == BatteryManager
+                            .BATTERY_STATUS_CHARGING
+                            || state
+                            == BatteryManager
+                            .BATTERY_STATUS_FULL;
+
+            int rawTemp =
+                    batteryIntent.getIntExtra(
+                            BatteryManager
+                                    .EXTRA_TEMPERATURE,
+                            -1
+                    );
+
+            if (rawTemp >= 0) {
+                temperature =
+                        rawTemp / 10f;
+            }
+        }
+
+        AudioManager audio =
+                (AudioManager)
+                        activity.getSystemService(
+                                Context.AUDIO_SERVICE
+                        );
+
+        int volumePercent = -1;
+
+        if (audio != null) {
+            int max =
+                    audio.getStreamMaxVolume(
+                            AudioManager.STREAM_MUSIC
+                    );
+
+            int current =
+                    audio.getStreamVolume(
+                            AudioManager.STREAM_MUSIC
+                    );
+
+            if (max > 0) {
+                volumePercent =
+                        Math.round(
+                                current
+                                        * 100f
+                                        / max
+                        );
+            }
+        }
+
+        int brightness =
+                Settings.System.getInt(
+                        activity
+                                .getContentResolver(),
+                        Settings.System
+                                .SCREEN_BRIGHTNESS,
+                        -1
+                );
+
+        int brightnessPercent =
+                brightness < 0
+                        ? -1
+                        : Math.round(
+                                brightness
+                                        * 100f
+                                        / 255f
+                        );
+
+        long uptimeMinutes =
+                SystemClock.elapsedRealtime()
+                        / 60000L;
+
+        StringBuilder answer =
+                new StringBuilder(
+                        "Toestelstatus: "
+                );
+
+        if (capacity >= 0) {
+            answer.append(
+                    "batterij "
+            )
+                    .append(capacity)
+                    .append("%")
+                    .append(
+                            charging
+                                    ? " en aan het opladen"
+                                    : ""
+                    );
+
+            if (temperature >= 0f) {
+                answer.append(
+                        ", "
+                )
+                        .append(
+                                String.format(
+                                        Locale.ROOT,
+                                        "%.1f",
+                                        temperature
+                                )
+                        )
+                        .append(
+                                " graden"
+                        );
+            }
+
+            answer.append(
+                    ". "
+            );
+        }
+
+        answer.append(
+                online
+                        ? "Internet via "
+                        + networkName
+                        + ". "
+                        : "Geen gevalideerd internet. "
+        );
+
+        if (totalBytes > 0L) {
+            answer.append(
+                    formatGigabytes(
+                            freeBytes
+                    )
+            )
+                    .append(
+                            " GB opslag vrij. "
+                    );
+        }
+
+        if (volumePercent >= 0) {
+            answer.append(
+                    "Media-volume "
+            )
+                    .append(
+                            volumePercent
+                    )
+                    .append(
+                            "%. "
+                    );
+        }
+
+        if (brightnessPercent >= 0) {
+            answer.append(
+                    "Helderheid "
+            )
+                    .append(
+                            brightnessPercent
+                    )
+                    .append(
+                            "%. "
+                    );
+        }
+
+        answer.append(
+                "Android "
+        )
+                .append(
+                        Build.VERSION.RELEASE
+                )
+                .append(
+                        ", uptime ongeveer "
+                )
+                .append(
+                        uptimeMinutes
+                                / 60L
+                )
+                .append(
+                        " uur."
+                );
+
+        return new CommandResult(
+                true,
+                answer.toString(),
+                "DEVICE • STATUS"
+        );
+    }
+
+    private static String formatGigabytes(
+            long bytes
+    ) {
+        return String.format(
+                Locale.ROOT,
+                "%.1f",
+                bytes
+                        / 1073741824d
         );
     }
 

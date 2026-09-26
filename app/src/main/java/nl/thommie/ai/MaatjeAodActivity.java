@@ -35,6 +35,9 @@ public class MaatjeAodActivity
     private TextView date;
     private TextView battery;
 
+    private BackgroundWakeWord
+            aodWakeWord;
+
     private final Handler handler =
             new Handler(
                     Looper.getMainLooper()
@@ -99,6 +102,46 @@ public class MaatjeAodActivity
         hideSystemUi();
         ensureLockTask();
 
+        MaatjeVoiceInteractionService
+                .setAodVisible(true);
+
+        aodWakeWord =
+                new BackgroundWakeWord(
+                        this,
+                        new BackgroundWakeWord.Callback() {
+                            @Override
+                            public void onReady() {
+                                if (aodWakeWord != null) {
+                                    aodWakeWord.start();
+                                }
+                            }
+
+                            @Override
+                            public void onDetected() {
+                                handler.post(
+                                        MaatjeAodActivity.this
+                                                ::openMaatjeFromWakeWord
+                                );
+                            }
+
+                            @Override
+                            public void onError(
+                                    String message
+                            ) {
+                                handler.postDelayed(
+                                        () -> {
+                                            if (aodWakeWord != null) {
+                                                aodWakeWord.start();
+                                            }
+                                        },
+                                        1200L
+                                );
+                            }
+                        }
+                );
+
+        aodWakeWord.prepare();
+
         IntentFilter filter =
                 new IntentFilter(
                         ACTION_WAKE_DISPLAY
@@ -125,8 +168,26 @@ public class MaatjeAodActivity
     @Override
     protected void onResume() {
         super.onResume();
+
+        MaatjeVoiceInteractionService
+                .setAodVisible(true);
+
         hideSystemUi();
         ensureLockTask();
+
+        if (aodWakeWord != null
+                && aodWakeWord.isReady()) {
+            aodWakeWord.start();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        if (aodWakeWord != null) {
+            aodWakeWord.stop();
+        }
+
+        super.onPause();
     }
 
     @Override
@@ -140,6 +201,14 @@ public class MaatjeAodActivity
                     wakeReceiver
             );
         } catch (Exception ignored) {}
+
+        if (aodWakeWord != null) {
+            aodWakeWord.destroy();
+            aodWakeWord = null;
+        }
+
+        MaatjeVoiceInteractionService
+                .setAodVisible(false);
 
         super.onDestroy();
     }
@@ -345,6 +414,23 @@ public class MaatjeAodActivity
     }
 
     private void openMaatje() {
+        openMaatje(false);
+    }
+
+    private void openMaatjeFromWakeWord() {
+        openMaatje(true);
+    }
+
+    private void openMaatje(
+            boolean fromWakeWord
+    ) {
+        if (aodWakeWord != null) {
+            aodWakeWord.stop();
+        }
+
+        MaatjeVoiceInteractionService
+                .setAodVisible(false);
+
         Intent intent =
                 new Intent(
                         this,
@@ -355,6 +441,14 @@ public class MaatjeAodActivity
                 Intent.FLAG_ACTIVITY_CLEAR_TOP
                         | Intent.FLAG_ACTIVITY_SINGLE_TOP
         );
+
+        if (fromWakeWord) {
+            intent.putExtra(
+                    MainActivity
+                            .EXTRA_ASSISTANT_INVOCATION,
+                    true
+            );
+        }
 
         try {
             startActivity(intent);

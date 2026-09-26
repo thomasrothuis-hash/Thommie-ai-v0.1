@@ -1,3 +1,13 @@
+## MAATJE v1.3.8 screen-off hotword handoff hotfix
+
+- Explicitly hands the microphone from MainActivity to VoiceInteractionService on ACTION_SCREEN_OFF.
+- MainActivity stops and refuses to restart its own wake-word listener while the display is non-interactive.
+- VoiceInteractionService now listens when the screen is off even if MainActivity is still technically visible.
+- Screen-off hotword detections are no longer discarded just because MainActivity remains visible.
+- Holds a PARTIAL_WAKE_LOCK only during true screen-off hotword standby so Vosk keeps processing audio while the CPU would otherwise sleep.
+- Releases the standby wake lock on screen-on, detection, shutdown and destruction.
+- Hands the microphone back to MainActivity after the display becomes interactive again.
+
 ## MAATJE v1.3.7 universal realtime device bridge
 
 - Adds a Realtime function tool control_device for local phone status and actions.
@@ -46,7 +56,7 @@
 - Both update targets must match the signing certificate of the installed app.
 - Kiosk self-updates recover through MY_PACKAGE_REPLACED and re-enter the Device Owner home/lock flow.
 
-# MAATJE v1.3.7 OnePlus Edition + MAATJE Kiosk v1.0.9
+# MAATJE v1.3.8 OnePlus Edition + MAATJE Kiosk v1.0.9
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
 

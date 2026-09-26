@@ -4,7 +4,10 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.admin.DevicePolicyManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Rect;
@@ -18,6 +21,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.speech.RecognitionListener;
 import android.util.Base64;
 import android.speech.RecognizerIntent;
@@ -136,8 +140,56 @@ public class MainActivity extends Activity {
     private int kioskLogoTapCount = 0;
     private long kioskFirstLogoTapMs = 0L;
     private long normalListeningBlockedUntil = 0L;
+    private boolean screenStateReceiverRegistered = false;
     private static final long POST_TTS_COOLDOWN_MS = 850L;
     private static final long AOD_IDLE_DELAY_MS = 50000L;
+
+    private final BroadcastReceiver screenStateReceiver =
+            new BroadcastReceiver() {
+                @Override
+                public void onReceive(
+                        Context context,
+                        Intent intent
+                ) {
+                    if (intent == null) {
+                        return;
+                    }
+
+                    String action =
+                            intent.getAction();
+
+                    if (Intent.ACTION_SCREEN_OFF.equals(action)) {
+                        stopRecognitionSession();
+
+                        MaatjeVoiceInteractionService
+                                .refreshFromActivity();
+
+                        if (stateText != null) {
+                            stateText.setText(
+                                    "SLEEP • HEY MAATJE"
+                            );
+                        }
+
+                        return;
+                    }
+
+                    if (Intent.ACTION_SCREEN_ON.equals(action)) {
+                        MaatjeVoiceInteractionService
+                                .refreshFromActivity();
+
+                        if (appVisible
+                                && !chatBusy
+                                && !conversationModeActive) {
+                            mainHandler.postDelayed(
+                                    () -> scheduleWakeListening(
+                                            0L
+                                    ),
+                                    450L
+                            );
+                        }
+                    }
+                }
+            };
 
     private final Runnable aodIdleRunnable =
             new Runnable() {
@@ -264,6 +316,8 @@ public class MainActivity extends Activity {
 
         offlineWakeWord.prepare();
 
+        registerScreenStateReceiver();
+
         consumeAssistantIntent(
                 getIntent()
         );
@@ -369,7 +423,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v1.3.7-oneplus  •  ONEPLUS EDITION • PERSONAL AI TERMINAL"
+                "v1.3.8-oneplus  •  ONEPLUS EDITION • PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -2113,6 +2167,7 @@ public class MainActivity extends Activity {
 
         if (!wakeWordEnabled
                 || !appVisible
+                || !isScreenInteractive()
                 || chatBusy
                 || assistantSpeaking
                 || mediaPlayer != null
@@ -2294,6 +2349,7 @@ public class MainActivity extends Activity {
 
         if (!wakeWordEnabled
                 || !appVisible
+                || !isScreenInteractive()
                 || chatBusy
                 || conversationModeActive) {
             return;
@@ -2593,7 +2649,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.3.7 ONEPLUS – Geheugen"
+                                "MAATJE v1.3.8 ONEPLUS – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -2683,7 +2739,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.3.7 ONEPLUS – API"
+                                "MAATJE v1.3.8 ONEPLUS – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -3818,6 +3874,56 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void registerScreenStateReceiver() {
+        if (screenStateReceiverRegistered) {
+            return;
+        }
+
+        IntentFilter filter =
+                new IntentFilter();
+
+        filter.addAction(
+                Intent.ACTION_SCREEN_OFF
+        );
+        filter.addAction(
+                Intent.ACTION_SCREEN_ON
+        );
+
+        try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(
+                        screenStateReceiver,
+                        filter,
+                        Context.RECEIVER_NOT_EXPORTED
+                );
+            } else {
+                registerReceiver(
+                        screenStateReceiver,
+                        filter
+                );
+            }
+
+            screenStateReceiverRegistered = true;
+
+        } catch (Exception ignored) {}
+    }
+
+    private boolean isScreenInteractive() {
+        try {
+            PowerManager power =
+                    (PowerManager)
+                            getSystemService(
+                                    POWER_SERVICE
+                            );
+
+            return power == null
+                    || power.isInteractive();
+
+        } catch (Exception ignored) {
+            return true;
+        }
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -3900,6 +4006,16 @@ public class MainActivity extends Activity {
 
         if (offlineWakeWord != null) {
             offlineWakeWord.destroy();
+        }
+
+        if (screenStateReceiverRegistered) {
+            try {
+                unregisterReceiver(
+                        screenStateReceiver
+                );
+            } catch (Exception ignored) {}
+
+            screenStateReceiverRegistered = false;
         }
 
         stopCameraVision();

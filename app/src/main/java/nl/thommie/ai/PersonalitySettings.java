@@ -793,7 +793,7 @@ final class PersonalitySettings {
         box.addView(reset);
 
         AlertDialog dialog = new AlertDialog.Builder(activity)
-                .setTitle("MAATJE v1.3.7 ONEPLUS – Persoonlijkheid")
+                .setTitle("MAATJE v1.3.8 ONEPLUS – Persoonlijkheid")
                 .setView(scroll)
                 .setPositiveButton("Opslaan", null)
                 .setNegativeButton("Annuleren", null)

@@ -1,7 +1,10 @@
 package nl.thommie.ai;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.PowerManager;
@@ -36,10 +39,44 @@ public class MaatjeVoiceInteractionService
     private BackgroundWakeWord
             backgroundWakeWord;
 
+    private PowerManager.WakeLock
+            standbyWakeLock;
+
+    private boolean screenReceiverRegistered = false;
+
+    private final BroadcastReceiver screenStateReceiver =
+            new BroadcastReceiver() {
+                @Override
+                public void onReceive(
+                        Context context,
+                        Intent intent
+                ) {
+                    if (intent == null) {
+                        return;
+                    }
+
+                    String action =
+                            intent.getAction();
+
+                    if (Intent.ACTION_SCREEN_OFF.equals(action)
+                            || Intent.ACTION_SCREEN_ON.equals(action)) {
+                        handler.postDelayed(
+                                MaatjeVoiceInteractionService.this
+                                        ::refreshWake,
+                                Intent.ACTION_SCREEN_OFF.equals(action)
+                                        ? 120L
+                                        : 40L
+                        );
+                    }
+                }
+            };
+
     @Override
     public void onCreate() {
         super.onCreate();
         instance = this;
+
+        registerScreenStateReceiver();
 
         backgroundWakeWord =
                 new BackgroundWakeWord(
@@ -97,6 +134,18 @@ public class MaatjeVoiceInteractionService
             backgroundWakeWord.destroy();
             backgroundWakeWord = null;
         }
+
+        if (screenReceiverRegistered) {
+            try {
+                unregisterReceiver(
+                        screenStateReceiver
+                );
+            } catch (Exception ignored) {}
+
+            screenReceiverRegistered = false;
+        }
+
+        releaseStandbyWakeLock();
 
         if (instance == this) {
             instance = null;
@@ -160,7 +209,8 @@ public class MaatjeVoiceInteractionService
         }
 
         boolean shouldListen =
-                !activityVisible
+                (!activityVisible
+                        || !isScreenInteractive())
                         && !sessionVisible
                         && !aodVisible
                         && WakeWordSettings.enabled(
@@ -173,7 +223,14 @@ public class MaatjeVoiceInteractionService
 
         if (!shouldListen) {
             backgroundWakeWord.stop();
+            releaseStandbyWakeLock();
             return;
+        }
+
+        if (!isScreenInteractive()) {
+            acquireStandbyWakeLock();
+        } else {
+            releaseStandbyWakeLock();
         }
 
         if (!backgroundWakeWord.isReady()) {
@@ -184,10 +241,102 @@ public class MaatjeVoiceInteractionService
         backgroundWakeWord.start();
     }
 
+    private void registerScreenStateReceiver() {
+        if (screenReceiverRegistered) {
+            return;
+        }
+
+        IntentFilter filter =
+                new IntentFilter();
+
+        filter.addAction(
+                Intent.ACTION_SCREEN_OFF
+        );
+        filter.addAction(
+                Intent.ACTION_SCREEN_ON
+        );
+
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(
+                        screenStateReceiver,
+                        filter,
+                        Context.RECEIVER_NOT_EXPORTED
+                );
+            } else {
+                registerReceiver(
+                        screenStateReceiver,
+                        filter
+                );
+            }
+
+            screenReceiverRegistered = true;
+
+        } catch (Exception ignored) {}
+    }
+
+    private boolean isScreenInteractive() {
+        try {
+            PowerManager power =
+                    (PowerManager)
+                            getSystemService(
+                                    POWER_SERVICE
+                            );
+
+            return power == null
+                    || power.isInteractive();
+
+        } catch (Exception ignored) {
+            return true;
+        }
+    }
+
+    private void acquireStandbyWakeLock() {
+        try {
+            if (standbyWakeLock == null) {
+                PowerManager power =
+                        (PowerManager)
+                                getSystemService(
+                                        POWER_SERVICE
+                                );
+
+                if (power == null) {
+                    return;
+                }
+
+                standbyWakeLock =
+                        power.newWakeLock(
+                                PowerManager.PARTIAL_WAKE_LOCK,
+                                "maatje:screen-off-hotword"
+                        );
+
+                standbyWakeLock.setReferenceCounted(
+                        false
+                );
+            }
+
+            if (!standbyWakeLock.isHeld()) {
+                standbyWakeLock.acquire();
+            }
+
+        } catch (Exception ignored) {}
+    }
+
+    private void releaseStandbyWakeLock() {
+        try {
+            if (standbyWakeLock != null
+                    && standbyWakeLock.isHeld()) {
+                standbyWakeLock.release();
+            }
+        } catch (Exception ignored) {}
+    }
+
     private void stopWake() {
         if (backgroundWakeWord != null) {
             backgroundWakeWord.stop();
         }
+
+        releaseStandbyWakeLock();
     }
 
     @SuppressWarnings("deprecation")
@@ -239,7 +388,8 @@ public class MaatjeVoiceInteractionService
     }
 
     private void onWakeDetected() {
-        if (activityVisible
+        if ((activityVisible
+                && isScreenInteractive())
                 || sessionVisible) {
             return;
         }
@@ -252,6 +402,8 @@ public class MaatjeVoiceInteractionService
             backgroundWakeWord
                     .stopAndWait(1000L);
         }
+
+        releaseStandbyWakeLock();
 
         Bundle args =
                 new Bundle();

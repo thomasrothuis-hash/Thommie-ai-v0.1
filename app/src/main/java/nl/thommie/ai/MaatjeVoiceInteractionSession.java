@@ -1003,13 +1003,29 @@ final class MaatjeVoiceInteractionSession
                                         }
                                     } else {
                                         setStatus(
-                                                "LISTENING • REALTIME"
+                                                ConversationSettings.enabled(
+                                                        context
+                                                )
+                                                        ? "LISTENING • REALTIME"
+                                                        : "STANDBY • HEY MAATJE"
                                         );
 
                                         if (waveformView != null) {
                                             waveformView.setMode(
                                                     AudioWaveformView
                                                             .MODE_IDLE
+                                            );
+                                        }
+
+                                        if (!ConversationSettings.enabled(
+                                                context
+                                        )
+                                                && answerText != null
+                                                && answerText.length() > 0) {
+                                            mainHandler.postDelayed(
+                                                    MaatjeVoiceInteractionSession.this
+                                                            ::finishOverlay,
+                                                    850L
                                             );
                                         }
                                     }

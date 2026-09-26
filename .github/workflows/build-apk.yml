@@ -1,4 +1,4 @@
-name: Build MAATJE v1.3.3-oneplus + Kiosk v1.0.8
+name: Build MAATJE v1.3.4-oneplus + Kiosk v1.0.9
 
 on:
   workflow_dispatch:
@@ -66,28 +66,28 @@ jobs:
 
       - name: Rename APK
         run: |
-          cp app/build/outputs/apk/release/app-release.apk MAATJE_v1.3.3-oneplus.apk
-          cp kiosk/build/outputs/apk/release/kiosk-release.apk MAATJE_Kiosk_v1.0.8.apk
+          cp app/build/outputs/apk/release/app-release.apk MAATJE_v1.3.4-oneplus.apk
+          cp kiosk/build/outputs/apk/release/kiosk-release.apk MAATJE_Kiosk_v1.0.9.apk
 
       - name: Verify APK signature
         run: |
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify \
-            --print-certs MAATJE_v1.3.3-oneplus.apk
+            --print-certs MAATJE_v1.3.4-oneplus.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify \
-            --print-certs MAATJE_Kiosk_v1.0.8.apk
+            --print-certs MAATJE_Kiosk_v1.0.9.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MAATJE_v1.3.3-oneplus
-          path: MAATJE_v1.3.3-oneplus.apk
+          name: MAATJE_v1.3.4-oneplus
+          path: MAATJE_v1.3.4-oneplus.apk
           if-no-files-found: error
           retention-days: 30
 
       - name: Upload Kiosk APK
         uses: actions/upload-artifact@v4
         with:
-          name: MAATJE_Kiosk_v1.0.8
-          path: MAATJE_Kiosk_v1.0.8.apk
+          name: MAATJE_Kiosk_v1.0.9
+          path: MAATJE_Kiosk_v1.0.9.apk
           if-no-files-found: error
           retention-days: 30

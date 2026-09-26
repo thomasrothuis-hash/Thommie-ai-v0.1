@@ -140,130 +140,136 @@ final class KioskBridge {
             return;
         }
 
-        String[] items = {
-                "MAATJE updaten via QR",
-                "Timers & wekkers",
-                "Lokale toestelbediening",
-                "Wi-Fi aan",
-                "Wi-Fi uit",
-                "Bluetooth aan",
-                "Bluetooth uit",
-                "Locatie aan",
-                "Locatie uit",
-                "Kiosk-beheer openen"
-        };
-
-        new AlertDialog.Builder(activity)
-                .setTitle(
-                        "MAATJE • Toestelcontrole"
-                )
-                .setItems(
-                        items,
-                        (dialog, which) -> {
-                            switch (which) {
-                                case 0:
-                                    openUpdateUnlock(
-                                            activity
-                                    );
-                                    break;
-
-                                case 1:
-                                    activity.startActivity(
-                                            new Intent(
-                                                    activity,
-                                                    MaatjeScheduleActivity.class
-                                            )
-                                    );
-                                    break;
-
-                                case 2:
-                                    DeviceControl.showSettings(
-                                            activity
-                                    );
-                                    break;
-
-                                case 3:
-                                    sendCommand(
-                                            activity,
-                                            "wifi_on"
-                                    );
-                                    toast(
-                                            activity,
-                                            "Wi-Fi aan"
-                                    );
-                                    break;
-
-                                case 4:
-                                    sendCommand(
-                                            activity,
-                                            "wifi_off"
-                                    );
-                                    toast(
-                                            activity,
-                                            "Wi-Fi uit"
-                                    );
-                                    break;
-
-                                case 5:
-                                    sendCommand(
-                                            activity,
-                                            "bluetooth_on"
-                                    );
-                                    toast(
-                                            activity,
-                                            "Bluetooth aan"
-                                    );
-                                    break;
-
-                                case 6:
-                                    sendCommand(
-                                            activity,
-                                            "bluetooth_off"
-                                    );
-                                    toast(
-                                            activity,
-                                            "Bluetooth uit"
-                                    );
-                                    break;
-
-                                case 7:
-                                    sendCommand(
-                                            activity,
-                                            "location_on"
-                                    );
-                                    toast(
-                                            activity,
-                                            "Locatie aan"
-                                    );
-                                    break;
-
-                                case 8:
-                                    sendCommand(
-                                            activity,
-                                            "location_off"
-                                    );
-                                    toast(
-                                            activity,
-                                            "Locatie uit"
-                                    );
-                                    break;
-
-                                case 9:
-                                    openAdminUnlock(
-                                            activity
-                                    );
-                                    break;
-
-                                default:
-                                    break;
-                            }
+        MaatjeMenuDialog.show(
+                activity,
+                "Toestel & Kiosk",
+                "Directe bediening van de dedicated MAATJE-terminal.",
+                MaatjeMenuDialog.item(
+                        "QR",
+                        "Updates via QR",
+                        "MAATJE én Kiosk veilig bijwerken",
+                        () -> openUpdateUnlock(
+                                activity
+                        )
+                ),
+                MaatjeMenuDialog.item(
+                        "CLK",
+                        "Timers & wekkers",
+                        "Interne timers en alarmen",
+                        () -> activity.startActivity(
+                                new Intent(
+                                        activity,
+                                        MaatjeScheduleActivity.class
+                                )
+                        )
+                ),
+                MaatjeMenuDialog.item(
+                        "DEV",
+                        "Lokale toestelbediening",
+                        "Zaklamp, volume, helderheid en apps",
+                        () -> DeviceControl.showSettings(
+                                activity
+                        )
+                ),
+                MaatjeMenuDialog.item(
+                        "WI+",
+                        "Wi-Fi inschakelen",
+                        "Zet de Wi-Fi-radio lokaal aan",
+                        () -> {
+                            sendCommand(
+                                    activity,
+                                    "wifi_on"
+                            );
+                            toast(
+                                    activity,
+                                    "Wi-Fi aan"
+                            );
                         }
+                ),
+                MaatjeMenuDialog.item(
+                        "WI−",
+                        "Wi-Fi uitschakelen",
+                        "Zet de Wi-Fi-radio lokaal uit",
+                        () -> {
+                            sendCommand(
+                                    activity,
+                                    "wifi_off"
+                            );
+                            toast(
+                                    activity,
+                                    "Wi-Fi uit"
+                            );
+                        }
+                ),
+                MaatjeMenuDialog.item(
+                        "BT+",
+                        "Bluetooth inschakelen",
+                        "Bluetooth lokaal aanzetten",
+                        () -> {
+                            sendCommand(
+                                    activity,
+                                    "bluetooth_on"
+                            );
+                            toast(
+                                    activity,
+                                    "Bluetooth aan"
+                            );
+                        }
+                ),
+                MaatjeMenuDialog.item(
+                        "BT−",
+                        "Bluetooth uitschakelen",
+                        "Bluetooth lokaal uitzetten",
+                        () -> {
+                            sendCommand(
+                                    activity,
+                                    "bluetooth_off"
+                            );
+                            toast(
+                                    activity,
+                                    "Bluetooth uit"
+                            );
+                        }
+                ),
+                MaatjeMenuDialog.item(
+                        "LOC",
+                        "Locatie aan",
+                        "Locatieservices activeren",
+                        () -> {
+                            sendCommand(
+                                    activity,
+                                    "location_on"
+                            );
+                            toast(
+                                    activity,
+                                    "Locatie aan"
+                            );
+                        }
+                ),
+                MaatjeMenuDialog.item(
+                        "OFF",
+                        "Locatie uit",
+                        "Locatieservices uitschakelen",
+                        () -> {
+                            sendCommand(
+                                    activity,
+                                    "location_off"
+                            );
+                            toast(
+                                    activity,
+                                    "Locatie uit"
+                            );
+                        }
+                ),
+                MaatjeMenuDialog.item(
+                        "PIN",
+                        "Kiosk-beheer",
+                        "Beveiligd beheer, Android-instellingen en herstel",
+                        () -> openAdminUnlock(
+                                activity
+                        )
                 )
-                .setNegativeButton(
-                        "Sluiten",
-                        null
-                )
-                .show();
+        );
     }
 
     private static boolean openUpdateUnlock(

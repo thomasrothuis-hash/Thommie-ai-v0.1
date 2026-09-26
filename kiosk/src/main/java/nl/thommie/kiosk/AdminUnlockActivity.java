@@ -7,6 +7,8 @@ import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
+import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -194,6 +196,29 @@ public class AdminUnlockActivity extends Activity {
         setContentView(root);
 
         pinOne.requestFocus();
+
+        getWindow().setSoftInputMode(
+                WindowManager.LayoutParams
+                        .SOFT_INPUT_STATE_ALWAYS_VISIBLE
+        );
+
+        pinOne.postDelayed(
+                () -> {
+                    InputMethodManager imm =
+                            (InputMethodManager)
+                                    getSystemService(
+                                            INPUT_METHOD_SERVICE
+                                    );
+
+                    if (imm != null) {
+                        imm.showSoftInput(
+                                pinOne,
+                                InputMethodManager.SHOW_IMPLICIT
+                        );
+                    }
+                },
+                180L
+        );
     }
 
     private EditText pinField(

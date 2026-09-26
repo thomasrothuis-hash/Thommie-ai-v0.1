@@ -57,6 +57,14 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".MaatjeAodActivity"
+            android:excludeFromRecents="true"
+            android:screenOrientation="portrait"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:exported="false" />
+
         <service
             android:name=".MaatjeVoiceInteractionService"
             android:label="MAATJE"

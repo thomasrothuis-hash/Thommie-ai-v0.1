@@ -1,8 +1,10 @@
 package nl.thommie.ai;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.service.voice.VoiceInteractionService;
@@ -177,11 +179,61 @@ public class MaatjeVoiceInteractionService
         }
     }
 
+    @SuppressWarnings("deprecation")
+    private void wakeDisplayIfEnabled() {
+        if (!DisplaySettings
+                .wakeScreenOnHotword(
+                        this
+                )) {
+            return;
+        }
+
+        try {
+            PowerManager power =
+                    (PowerManager)
+                            getSystemService(
+                                    POWER_SERVICE
+                            );
+
+            if (power != null) {
+                PowerManager.WakeLock wakeLock =
+                        power.newWakeLock(
+                                PowerManager.FULL_WAKE_LOCK
+                                        | PowerManager.ACQUIRE_CAUSES_WAKEUP
+                                        | PowerManager.ON_AFTER_RELEASE,
+                                "maatje:hotword-screen"
+                        );
+
+                wakeLock.acquire(
+                        5000L
+                );
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            Intent wake =
+                    new Intent(
+                            MaatjeAodActivity
+                                    .ACTION_WAKE_DISPLAY
+                    );
+
+            wake.setPackage(
+                    getPackageName()
+            );
+
+            sendBroadcast(
+                    wake
+            );
+        } catch (Exception ignored) {}
+    }
+
     private void onWakeDetected() {
         if (activityVisible
                 || sessionVisible) {
             return;
         }
+
+        wakeDisplayIfEnabled();
 
         sessionVisible = true;
 

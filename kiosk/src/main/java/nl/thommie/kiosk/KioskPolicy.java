@@ -153,6 +153,14 @@ final class KioskPolicy {
         } catch (Exception ignored) {}
 
         try {
+            dpm.setSystemSetting(
+                    admin,
+                    Settings.System.SCREEN_OFF_TIMEOUT,
+                    "60000"
+            );
+        } catch (Exception ignored) {}
+
+        try {
             dpm.addUserRestriction(
                     admin,
                     UserManager.DISALLOW_ADD_USER

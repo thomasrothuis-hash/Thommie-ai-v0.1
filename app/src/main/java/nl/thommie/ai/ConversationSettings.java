@@ -25,6 +25,9 @@ final class ConversationSettings {
     private static final String KEY_TIMEOUT_SECONDS =
             "timeout_seconds";
 
+    private static final String KEY_V134_MIGRATED =
+            "v134_single_turn_default";
+
     private static final int DEFAULT_TIMEOUT_SECONDS =
             25;
 
@@ -42,8 +45,46 @@ final class ConversationSettings {
     static boolean enabled(Context context) {
         return prefs(context).getBoolean(
                 KEY_ENABLED,
-                true
+                false
         );
+    }
+
+    static void setEnabled(
+            Context context,
+            boolean enabled
+    ) {
+        prefs(context)
+                .edit()
+                .putBoolean(
+                        KEY_ENABLED,
+                        enabled
+                )
+                .apply();
+    }
+
+    static void applyV134Defaults(
+            Context context
+    ) {
+        SharedPreferences p =
+                prefs(context);
+
+        if (p.getBoolean(
+                KEY_V134_MIGRATED,
+                false
+        )) {
+            return;
+        }
+
+        p.edit()
+                .putBoolean(
+                        KEY_ENABLED,
+                        false
+                )
+                .putBoolean(
+                        KEY_V134_MIGRATED,
+                        true
+                )
+                .apply();
     }
 
     static int timeoutSeconds(Context context) {
@@ -161,7 +202,7 @@ final class ConversationSettings {
 
         new AlertDialog.Builder(activity)
                 .setTitle(
-                        "MAATJE v1.3.3 ONEPLUS – Gespreksmodus"
+                        "MAATJE v1.3.4 ONEPLUS – Gespreksmodus"
                 )
                 .setView(box)
                 .setPositiveButton(

@@ -1,3 +1,16 @@
+## MAATJE v1.3.4 + Kiosk v1.0.9 UI, sleep and wake update
+
+- Replaces the main MAATJE settings list with a custom full-screen MAATJE control-center UI.
+- Replaces the Toestel & Kiosk list with the same custom MAATJE card interface.
+- Adds Scherm & AOD settings with optional custom AMOLED AOD.
+- Kiosk Device Owner sets Android screen-off timeout to 60 seconds.
+- Removes MAATJE's permanent KEEP_SCREEN_ON behavior.
+- Hey Maatje wakes the display from screen-off using the existing VoiceInteractionService wake-word path.
+- AOD closes automatically when Hey Maatje is detected.
+- Conversation mode migrates to single-turn by default: answer once, then return to wake-word standby.
+- Kiosk PIN field requests focus and opens the numeric keyboard immediately.
+- Keeps the dual MAATJE/Kiosk QR updater from v1.0.8.
+
 ## MAATJE v1.3.3 + Kiosk v1.0.8 dedicated navigation and dual updater
 
 - MAATJE explicitly enters Lock Task when the Device Owner has allowlisted nl.thommie.ai.
@@ -8,7 +21,7 @@
 - Both update targets must match the signing certificate of the installed app.
 - Kiosk self-updates recover through MY_PACKAGE_REPLACED and re-enter the Device Owner home/lock flow.
 
-# MAATJE v1.3.3 OnePlus Edition + MAATJE Kiosk v1.0.8
+# MAATJE v1.3.4 OnePlus Edition + MAATJE Kiosk v1.0.9
 
 Dedicated personal AI terminal for Android / OnePlus 9 Pro.
 

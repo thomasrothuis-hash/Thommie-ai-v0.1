@@ -25,6 +25,7 @@ import android.speech.SpeechRecognizer;
 import android.text.InputType;
 import android.text.method.ScrollingMovementMethod;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.TextureView;
 import android.view.View;
 import android.view.Window;
@@ -136,6 +137,42 @@ public class MainActivity extends Activity {
     private long kioskFirstLogoTapMs = 0L;
     private long normalListeningBlockedUntil = 0L;
     private static final long POST_TTS_COOLDOWN_MS = 850L;
+    private static final long AOD_IDLE_DELAY_MS = 50000L;
+
+    private final Runnable aodIdleRunnable =
+            new Runnable() {
+                @Override
+                public void run() {
+                    if (!appVisible
+                            || !DisplaySettings.aodEnabled(
+                            MainActivity.this
+                    )) {
+                        return;
+                    }
+
+                    if (chatBusy
+                            || assistantSpeaking
+                            || realtimeAssistantSpeaking
+                            || commandListening
+                            || wakeWordListening
+                            || cameraVisionActive) {
+                        mainHandler.postDelayed(
+                                this,
+                                10000L
+                        );
+                        return;
+                    }
+
+                    try {
+                        startActivity(
+                                new Intent(
+                                        MainActivity.this,
+                                        MaatjeAodActivity.class
+                                )
+                        );
+                    } catch (Exception ignored) {}
+                }
+            };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -144,10 +181,11 @@ public class MainActivity extends Activity {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
-        getWindow().addFlags(
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-        );
         installDedicatedNavigationGuards();
+
+        ConversationSettings.applyV134Defaults(
+                this
+        );
 
         buildUi();
         enforceDedicatedUi();
@@ -332,7 +370,7 @@ public class MainActivity extends Activity {
 
         TextView version = new TextView(this);
         version.setText(
-                "v1.3.3-oneplus  •  ONEPLUS EDITION • PERSONAL AI TERMINAL"
+                "v1.3.4-oneplus  •  ONEPLUS EDITION • PERSONAL AI TERMINAL"
         );
         version.setTextColor(MUTED);
         version.setTextSize(11);
@@ -2383,95 +2421,128 @@ public class MainActivity extends Activity {
     }
 
     private void showSettingsMenu() {
-        String[] options = {
-                "API-key",
-                "Internet",
-                "Standaard assistent",
-                "Gebruik & tokens",
-                "Toestel & Kiosk",
-                "Stem & audio",
-                "Geheugen",
-                "Persoonlijkheid",
-                "Gespreksmodus",
-                "Wake word"
-        };
+        MaatjeMenuDialog.show(
+                this,
+                "Instellingen",
+                "Alles voor MAATJE, je terminal en de manier waarop ze reageert.",
+                MaatjeMenuDialog.item(
+                        "AI",
+                        "API-key",
+                        "OpenAI accountverbinding en sleutel",
+                        () -> showApiKeyDialog(false)
+                ),
+                MaatjeMenuDialog.item(
+                        "NET",
+                        "Internet",
+                        "Webzoekfunctie en online toegang",
+                        () -> InternetSettings.show(this)
+                ),
+                MaatjeMenuDialog.item(
+                        "AST",
+                        "Standaard assistent",
+                        "Android assistentrol en systeemkoppeling",
+                        () -> AssistantSettings.show(this)
+                ),
+                MaatjeMenuDialog.item(
+                        "DEV",
+                        "Toestel & Kiosk",
+                        "Updates, timers, verbindingen en beheer",
+                        () -> KioskBridge.showDevicePanel(this)
+                ),
+                MaatjeMenuDialog.item(
+                        "AOD",
+                        "Scherm & AOD",
+                        DisplaySettings.aodEnabled(this)
+                                ? "AOD aan • Hey Maatje wekt het scherm"
+                                : "Scherm uit na 1 min • Hey Maatje wekt het scherm",
+                        () -> DisplaySettings.show(
+                                this,
+                                () -> {
+                                    endConversationSession();
+                                    resetIdleDisplayTimer();
+                                }
+                        )
+                ),
+                MaatjeMenuDialog.item(
+                        "VOX",
+                        "Stem & audio",
+                        "Stem, realtime audio en afspeelgedrag",
+                        () -> VoiceSettings.show(
+                                this,
+                                this::testCloudVoice
+                        )
+                ),
+                MaatjeMenuDialog.item(
+                        "MEM",
+                        "Geheugen",
+                        "Gespreksgeheugen en lokaal profiel",
+                        this::showMemoryDialog
+                ),
+                MaatjeMenuDialog.item(
+                        "ID",
+                        "Persoonlijkheid",
+                        "Toon, humor en karakter van MAATJE",
+                        () -> PersonalitySettings.show(this)
+                ),
+                MaatjeMenuDialog.item(
+                        "MIC",
+                        "Gespreksmodus",
+                        ConversationSettings.enabled(this)
+                                ? "Handsfree vervolgvragen staan aan"
+                                : "Na één antwoord terug naar wake-word standby",
+                        () -> ConversationSettings.show(
+                                this,
+                                enabled -> {
+                                    if (!enabled) {
+                                        endConversationSession();
+                                        scheduleWakeListening(300);
+                                    }
+                                }
+                        )
+                ),
+                MaatjeMenuDialog.item(
+                        "HEY",
+                        "Wake word",
+                        "Hey Maatje, gevoeligheid en debug",
+                        () -> WakeWordSettings.show(
+                                this,
+                                enabled -> {
+                                    wakeWordEnabled = enabled;
 
-        new AlertDialog.Builder(this)
-                .setTitle(
-                        "MAATJE v1.3.3 ONEPLUS – Instellingen"
-                )
-                .setItems(
-                        options,
-                        (dialog, which) -> {
-                            if (which == 0) {
-                                showApiKeyDialog(false);
-                            } else if (which == 1) {
-                                InternetSettings.show(this);
-                            } else if (which == 2) {
-                                AssistantSettings.show(this);
-                            } else if (which == 3) {
-                                UsageTracker.show(this);
-                            } else if (which == 4) {
-                                KioskBridge.showDevicePanel(this);
-                            } else if (which == 5) {
-                                VoiceSettings.show(
-                                        this,
-                                        this::testCloudVoice
-                                );
-                            } else if (which == 6) {
-                                showMemoryDialog();
-                            } else if (which == 7) {
-                                PersonalitySettings.show(this);
-                            } else if (which == 8) {
-                                ConversationSettings.show(
-                                        this,
-                                        enabled -> {
-                                            if (!enabled) {
-                                                endConversationSession();
-                                                scheduleWakeListening(300);
-                                            }
+                                    MaatjeVoiceInteractionService
+                                            .refreshFromActivity();
+
+                                    updateWakeDebugVisibility();
+                                    stopRecognitionSession();
+
+                                    if (enabled) {
+                                        if (checkSelfPermission(
+                                                Manifest.permission.RECORD_AUDIO
+                                        ) != PackageManager.PERMISSION_GRANTED) {
+                                            pendingManualPermission = false;
+
+                                            requestPermissions(
+                                                    new String[]{
+                                                            Manifest.permission.RECORD_AUDIO
+                                                    },
+                                                    REQ_AUDIO
+                                            );
+                                        } else {
+                                            scheduleWakeListening(350);
                                         }
-                                );
-                            } else {
-                                WakeWordSettings.show(
-                                        this,
-                                        enabled -> {
-                                            wakeWordEnabled = enabled;
-
-                                            MaatjeVoiceInteractionService
-                                                    .refreshFromActivity();
-
-                                            updateWakeDebugVisibility();
-                                            stopRecognitionSession();
-
-                                            if (enabled) {
-                                                if (checkSelfPermission(
-                                                        Manifest.permission.RECORD_AUDIO
-                                                ) != PackageManager.PERMISSION_GRANTED) {
-                                                    pendingManualPermission = false;
-
-                                                    requestPermissions(
-                                                            new String[]{
-                                                                    Manifest.permission.RECORD_AUDIO
-                                                            },
-                                                            REQ_AUDIO
-                                                    );
-                                                } else {
-                                                    scheduleWakeListening(350);
-                                                }
-                                            } else {
-                                                stateText.setText("READY");
-                                            }
-                                        }
-                                );
-                            }
-                        }
+                                    } else {
+                                        stateText.setText("READY");
+                                    }
+                                }
+                        )
+                ),
+                MaatjeMenuDialog.item(
+                        "LOG",
+                        "Gebruik & tokens",
+                        "Tokenverbruik en diagnostiek",
+                        () -> UsageTracker.show(this)
                 )
-                .setNegativeButton(
-                        "Sluiten",
-                        null
-                )
-                .show();
+        );
     }
 
     private void showMemoryDialog() {
@@ -2523,7 +2594,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.3.3 ONEPLUS – Geheugen"
+                                "MAATJE v1.3.4 ONEPLUS – Geheugen"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -2613,7 +2684,7 @@ public class MainActivity extends Activity {
         AlertDialog dialog =
                 new AlertDialog.Builder(this)
                         .setTitle(
-                                "MAATJE v1.3.3 ONEPLUS – API"
+                                "MAATJE v1.3.4 ONEPLUS – API"
                         )
                         .setView(box)
                         .setPositiveButton(
@@ -3576,6 +3647,36 @@ public class MainActivity extends Activity {
         endCommunicationAudio();
     }
 
+    private void resetIdleDisplayTimer() {
+        mainHandler.removeCallbacks(
+                aodIdleRunnable
+        );
+
+        if (appVisible
+                && DisplaySettings.aodEnabled(
+                this
+        )) {
+            mainHandler.postDelayed(
+                    aodIdleRunnable,
+                    AOD_IDLE_DELAY_MS
+            );
+        }
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(
+            MotionEvent event
+    ) {
+        if (event.getActionMasked()
+                == MotionEvent.ACTION_DOWN) {
+            resetIdleDisplayTimer();
+        }
+
+        return super.dispatchTouchEvent(
+                event
+        );
+    }
+
     @SuppressWarnings("deprecation")
     private void installDedicatedNavigationGuards() {
         View decor =
@@ -3726,6 +3827,8 @@ public class MainActivity extends Activity {
         enforceDedicatedUi();
 
         appVisible = true;
+        resetIdleDisplayTimer();
+
         wakeWordEnabled =
                 WakeWordSettings.enabled(this);
 
@@ -3768,6 +3871,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         appVisible = false;
+        mainHandler.removeCallbacks(
+                aodIdleRunnable
+        );
+
         stopCameraVision();
         stopRealtimeVoice();
         endConversationSession();
